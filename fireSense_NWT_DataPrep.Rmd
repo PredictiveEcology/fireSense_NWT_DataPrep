@@ -8,11 +8,6 @@ output: html_document
 The purpose of this file is to prepare the climate and vegetation data needed to run the fireSense modules for the Northwest Territories.
 
 # Setup
-```{R global_options, echo=FALSE}
-knitr::opts_chunk$set(eval = FALSE)
-```
-
-## Load the packages used by the script
 ```{r packages, message=FALSE}
 library(dplyr)
 library(raster)
@@ -20,6 +15,8 @@ library(reproducible)
 library(sf)
 library(sp)
 library(tibble)
+
+options(reproducible.overwrite = TRUE)
 ```
 
 # Climate
@@ -33,77 +30,12 @@ library(tibble)
 BCR6 <- Cache(
   prepInputs,
   url = "https://drive.google.com/open?id=1sEiXKnAOCi-f1BF7b4kTg-6zFlGr0YOH",
-  targetFile = "bcr6.tif",
-  useCache = TRUE
+  targetFile = "bcr6.tif"
 )
 
-withinBCR6 <- !is.na(BCR6[])
-
-#
-# Elevation
-#
-## Load elevation data
-#
-DEM <- prepInputs(
-  url = "https://drive.google.com/open?id=1WHZnpWokgjraR7tGz0mIJEr9klLGUzB0",
-  targetFile = "nadem100laz.tif", # Be explicit and tractable
-  overwrite = TRUE,
-  useCache = TRUE
-)
-
-#
-## Reproject, crop, mask the DEM
-#
-preCropInputs <- function(bcr6, dem)
-{
-  # Speed-up process by pre-cropping: 110% of the extent of BCR6
-  e <- as(extent(bcr6) * 1.1, "SpatialPolygons")
-  proj4string(e) <- proj4string(bcr6)
-  e <- spTransform(e, CRSobj = proj4string(dem))
-  cropInputs(x = dem, studyArea = e)
-}
-
-DEM <- Cache(
-  postProcess,
-  x = preCropInputs(BCR6, DEM),
-  rasterToMatch = BCR6, 
-  maskWithRTM = TRUE
-)
-
-#
-## Extract elevation data
-#
-elev <- DEM[withinBCR6]
-
-
-#
-# Write lat, long, elev to csv
-#
-write.csv(
-  (
-    bind_cols(
-      (
-        st_as_sf(
-          as_tibble(
-            raster::xyFromCell(BCR6, which(withinBCR6)[!is.na(elev)])
-          ),
-          coords = c("x", "y"),
-          crs = proj4string(DEM)
-        ) %>%
-          st_transform(crs = 4326) %>%
-          st_coordinates() %>%
-          as_tibble() %>%
-          rename(lat = Y, long = X)
-      ),
-      tibble(el = elev[!is.na(elev)]) # Parts of the BCR6 where we have no data, 
-                                      # after manual inspection, they are pixels
-                                      # in the sea. Confirmed by Diana.
-    ) %>%
-      mutate(ID1 = which(withinBCR6)[!is.na(elev)], ID2 = "z") %>%
-      dplyr::select(ID1, ID2, lat, long, el)    
-  ),
-  file = "climateNA_inputs.csv",
-  row.names = FALSE
+BCR6_NWT_VT <- Cache(
+  prepInputs,
+  url = "https://drive.google.com/open?id=1Zn2FTohJv_j0p1Fy0SHBYPj-QR1Ue6BP"
 )
 
 ```
@@ -114,66 +46,24 @@ write.csv(
 ```
 
 # Vegetation
-## Load LCC05, reproject, crop, etc...
+## Load LCC05_BCR6, LCC05_BCR6_NWT
 ```{r LCC05_GIS}
 #
-# Reproject, crop, mask veg data with BCR6
+# Load LCC05_BCR6
 #
-## Load BCR6 (raster)
-#
-BCR6 <- Cache(
+LCC05_BCR6 <- Cache(
   prepInputs,
-  url = "https://drive.google.com/open?id=1sEiXKnAOCi-f1BF7b4kTg-6zFlGr0YOH",
-  targetFile = "bcr6.tif",
-  useCache = TRUE
+  url = "https://drive.google.com/open?id=1z5sw3Z6tSEANa3xhO73mNzT9nIMhtAsy", 
+  filename2 = NULL
 )
 
-preCropInputs <- function(bcr6, lcc)
-{
-  # Speed-up process by pre-cropping: 110% of the extent of BCR6
-  e <- as(extent(bcr6) * 1.1, "SpatialPolygons")
-  proj4string(e) <- proj4string(bcr6)
-  e <- spTransform(e, CRSobj = proj4string(lcc))
-  cropInputs(x = lcc, studyArea = e)
-}
-
 #
-## LCC05
+# Load LCC05_BCR6_NWT
 #
-LCC05 <- Cache(
+LCC05_BCR6_NWT <- Cache(
   prepInputs,
-  url = "https://drive.google.com/open?id=1ziUPnFZMamA5Yi6Hhex9aZKerXLpVxvz",
-  targetFile = "LCC2005_V1_4a.tif",
-  overwrite = TRUE,
-  useCache = TRUE
-)
-
-LCC05 <- Cache(
-  postProcess,
-  x = preCropInputs(BCR6, LCC05),
-  method = "ngb",
-  rasterToMatch = BCR6, 
-  maskWithRTM = TRUE
-)
-
-#
-## LCC10
-#
-LCC10 <- Cache(
-  prepInputs,
-  url = "http://ftp.maps.canada.ca/pub/nrcan_rncan/Land-cover_Couverture-du-sol/canada-landcover_canada-couverture-du-sol/CanadaLandcover2010.zip",
-  targetFile = "CAN_NALCMS_LC_30m_LAEA_mmu12_urb05_CAL.tif",
-  # destinationPath = "F:/NWT/Vegetation/",
-  overwrite = TRUE,
-  useCache = TRUE
-)
-
-LCC10 <- Cache(
-  postProcess,
-  x = preCropInputs(BCR6, LCC10),
-  method = "ngb",
-  rasterToMatch = BCR6, 
-  maskWithRTM = TRUE
+  url = "https://drive.google.com/open?id=1_IjMnvEpghM7hCUNKDrScRamnCXNhKfv",
+  filename2 = NULL
 )
 ```
 
@@ -230,37 +120,39 @@ Reclassified as:
 |Crops|2|
 |Deciduous|3|
 |Disturbed|4|
-|Mixed, conifer-dominated|5|
-|Mixed, deciduous-dominated|6|
-|Open|7|
-|Open-conifer|8|
-|Shrub|9|
-|Wetlands|10|
-|Water|NA|
+|Mixed C-dom|5|
+|Mixed Young|6|
+|Mixed F-dom|7|
+|Non-vascular|8|
+|Open-conifer|9|
+|Shrub|10|
+|Wetlands|11|
+
 \  
 ```{R Reclassify LCC05 39 classes}
 rcl <- matrix(
   #   from,  to,    becomes
-  c(     -1,  0.01,       2, # After visual inspection, likely croplands
+  c(     -1,  0.01,      10, # After visual inspection, likely croplands
        0.99,  1.01,       1,
        1.99,  2.01,       3,
        2.99,  3.01,       5,
-       3.99,  5.01,       6,
+       3.99,  4.01,       6,
+       4.99,  5.01,       7,
        5.99, 10.01,       1,
       10.99, 12.01,       3,
       12.99, 13.01,       5,
-      13.99, 14.01,       6,
+      13.99, 14.01,       7,
       14.99, 15.01,       4,
-      15.99, 16.01,       9,
-      16.99, 17.01,       2,
-      17.99, 18.01,       7,
-      18.99, 19.01,      10, # Wetlands, waiting for Tati's update
-      19.99, 20.01,       8,
-      20.99, 24.01,       9,
-      24.99, 25.01,       7,
+      15.99, 16.01,      10,
+      16.99, 17.01,       8,
+      17.99, 18.01,      10,
+      18.99, 19.01,      11, # Wetlands, waiting for Tati's update
+      19.99, 20.01,       9,
+      20.99, 24.01,      10,
+      24.99, 25.01,       8,
       25.99, 29.01,       2,
-      29.99, 31.01,       7,
-      31.99, 32.01,      10, # Wetlands (here lichen-spruce bog), waiting for Tati's update
+      29.99, 31.01,       8,
+      31.99, 32.01,      11, # Wetlands (here lichen-spruce bog), waiting for Tati's update
       32.99, 33.01,      NA,
       33.99, 35.01,       4,
       35.99, 39.01,      NA
@@ -268,6 +160,47 @@ rcl <- matrix(
   ncol = 3,
   byrow = TRUE
 )
+
+
+LCC05_BCR6_rcl <- Cache(reclassify, x = LCC05_BCR6, rcl = rcl)
+LCC05_BCR6_NWT_rcl <- Cache(reclassify, x = LCC05_BCR6_NWT, rcl = rcl)
 ```
 
+## Aggregate at 10km resolution
+```{R}
+#
+# Create an aggregation template which will be used to keep only pixels entirely
+# inside BCR6_NWT
+#
+agg_tmpl <- aggregate(LCC05_BCR6_NWT, fact = 40)
+isWithinBCR6_NWT <- rasterize(BCR6_NWT_VT, agg_tmpl, getCover = TRUE)[] == 1
+agg_tmpl[!isWithinBCR6_NWT] <- NA
 
+#
+# Discard pixels of LCC05_BCR6_NWT not entirely inside BCR6_NWT
+#
+LCC05_BCR6_NWT_rcl[is.na(agg_tmpl[])] <- NA
+
+#
+# Compute the proportion of each Land Cover Class
+#
+n_lcc <- 11
+
+test <- lapply(
+  1:n_lcc,
+  function(cl_i)
+  {
+    calc_prop_lcc <- function(x, cl = cl_i, na.rm = TRUE)
+    {
+      sum(x == cl, na.rm = na.rm) / 1600
+    }
+    
+    aggregate(LCC05_BCR6_NWT_rcl, fact = 40, fun = calc_prop_lcc)
+  }
+)
+
+#
+
+
+
+```
