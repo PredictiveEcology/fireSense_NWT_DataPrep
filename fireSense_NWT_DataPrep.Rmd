@@ -10,9 +10,9 @@ The purpose of this file is to prepare the climate and vegetation data needed to
 # Setup
 ```{r packages, message=FALSE}
 library(dplyr)
+library(ff)
 library(lubridate)
 library(raster)
-library(readr)
 library(reproducible)
 library(sf)
 library(sp)
@@ -52,7 +52,6 @@ elev <- elev[!is.na(elev)]
 #
 # Write lat, long, elev to csv
 #
-
 np <- 8 # Split in 8 parts to stay within memory limits and because we have 8 threads available...
 wp <- rep(1:np, length.out = length(elev))
 
@@ -90,6 +89,12 @@ for (i in 1:np)
 Climate variables are described in the [AdaptWest paper](https://dx.doi.org/10.1371/journal.pone.0156720)
 ```{R}
 # Add a check for NA (-9999 value)
+
+climatNA_outputs <- read.csv.ffdf(
+  file = "C:/climateNA_inputs_1995-2015AMT.csv", 
+  header = TRUE, 
+  colClasses = c("integer", "integer", "factor", rep("numeric", 171))
+)
 
 climatNA_outputs <- read_csv("C:/climateNA_inputs_1995-2015AMT.csv") %>%
   select( Year, ID1, Latitude, Longitude, num_range("Tmax", 4:9, 2), num_range("PPT",  4:9, 2) ) 
