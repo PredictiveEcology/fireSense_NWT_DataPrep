@@ -19,6 +19,7 @@ library(sp)
 library(tibble)
 
 options(reproducible.overwrite = TRUE)
+knitr::opts_chunk$set(eval = FALSE)
 ```
 
 # Climate / Fire weather
