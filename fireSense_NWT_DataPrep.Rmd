@@ -1,16 +1,18 @@
 ---
 title: "fireSense_NWT_DataPrep"
 author: "Jean Marchal"
-date: "January 31, 2019"
+date: "February, 2019"
 output: html_document
 ---
 
-The purpose of this file is to prepare the climate and vegetation data needed to run the fireSense modules for the Northwest Territories.
+The purpose of this file is to prepare the climate and vegetation data needed to run the fireSense modules for BCR6 and BCR6 contained in the Northwest Territories.
 
 # Setup
 ```{r packages, message=FALSE}
 library(dplyr)
+library(lubridate)
 library(raster)
+library(readr)
 library(reproducible)
 library(sf)
 library(sp)
@@ -19,41 +21,146 @@ library(tibble)
 options(reproducible.overwrite = TRUE)
 ```
 
-# Climate
-## Create csv file with the lat, long, elevation needed by ClimateNA
-```{R Prepare ClimateNA inputs}
+# Climate / Fire weather
+### Prepare ClimateNA inputs
+```{R}
 #
-# Latitude, longitude
+# Need to have 3 things: lat, long, elevation
 #
-## Load BCR6 (raster)
 #
-BCR6 <- Cache(
-  prepInputs,
+## Load BCR6_RT, raster version of the BCR6 study area
+#
+BCR6_RT <- prepInputs(
   url = "https://drive.google.com/open?id=1sEiXKnAOCi-f1BF7b4kTg-6zFlGr0YOH",
   targetFile = "bcr6.tif"
 )
 
-BCR6_NWT_VT <- Cache(
-  prepInputs,
-  url = "https://drive.google.com/open?id=1Zn2FTohJv_j0p1Fy0SHBYPj-QR1Ue6BP"
+DEM_BCR6 <- prepInputs(
+  url = "https://drive.google.com/open?id=1_7L8QDozDtGSuYWBKKkgzCABocR9lWVN"
 )
 
+withinBCR6 <- !is.na(BCR6_RT[])
+elev <- DEM_BCR6[withinBCR6]
+
+#
+## Parts of the BCR6 where we have no data, after manual inspection, they are pixels
+## in the sea. Confirmed by Diana. Remove these pixels from BCR6.
+#
+withinBCR6 <- which(withinBCR6)[!is.na(elev)]
+elev <- elev[!is.na(elev)]
+
+#
+# Write lat, long, elev to csv
+#
+
+np <- 8 # Split in 8 parts to stay within memory limits and because we have 8 threads available...
+wp <- rep(1:np, length.out = length(elev))
+
+for (i in 1:np)
+{
+  write.csv(
+    (
+      bind_cols(
+        (
+          st_as_sf(
+            as_tibble(
+              raster::xyFromCell(BCR6_RT, withinBCR6[wp == i])
+            ),
+            coords = c("x", "y"),
+            crs = proj4string(DEM_BCR6)
+          ) %>%
+            st_transform(crs = 4326) %>%
+            st_coordinates() %>%
+            as_tibble() %>%
+            rename(lat = Y, long = X)
+        ),
+        tibble(el = elev[wp == i])
+      ) %>%
+        mutate(ID1 = withinBCR6[wp == i], ID2 = "") %>%
+        dplyr::select(ID1, ID2, lat, long, el)
+    ),
+    file = paste0("climateNA_inputs", i, ".csv"),
+    row.names = FALSE,
+    eol = "\r\n" # ClimateNA is windows software
+  )
+}
 ```
 
+### Read and filter ClimateNA outputs
+Climate variables are described in the [AdaptWest paper](https://dx.doi.org/10.1371/journal.pone.0156720)
+```{R}
+# Add a check for NA (-9999 value)
 
-```{R Read climateNA ouputs}
-# Load CSV files with monthly variables
+climatNA_outputs <- read_csv("C:/climateNA_inputs_1995-2015AMT.csv") %>%
+  select( Year, ID1, Latitude, Longitude, num_range("Tmax", 4:9, 2), num_range("PPT",  4:9, 2) ) 
+
+```
+### Calculate MDC (April - September)
+Calculate the Monthly Drought Code following [Bergeron et al. 2010](https://dx.doi.org/10.1071/WF09092):
+
+$$Q = 800e^{-DC/400}$$
+$$E_m = n(0.36(\bar{T}_{mx}) + L_f)$$
+$$DC_{HALF} = MDC_0 + 0.25E_m$$
+$$Q_{mr} = 3.937RM_{EFF}/800e^{-MDC_0/400}$$
+$$DC_{mr} = DC_{HALF} - 400ln(1+Q_{mr})$$
+$$MDC_m = DC_{mr} + 0.25E_m$$
+$$MDC = (MDC_0 + MDC_m) / 2$$
+
+Abbreviations:
+
+  * $DC_{HALF}$: drying taking place over the first half of the month
+  * $DC_{mr}$: drying taking place over the middle of the month
+  * $MDC_0$: MDC from the end of the previous month
+  * $MDC_m$: MDC at the end of the month
+  * $E_m$: evapotranspiration over month
+  * $L_f$: standard day-length adjustement factor
+  * $n$: number of days in the month
+  * $Q$: moisture equivalent
+  * $Q_{mr}$: moisture equivalent in the layer after rain
+  * $r_m$: total monthly rainfall
+  * $RM_{EFF}$: effective rainfall
+  * $T_{mx}$: monthly mean of daily max temperatures
+
+```{R}
+# Day length adjustement L_f in Drought Code (taken from Van Wagner 1987)
+L_f <- function(month)
+{
+  if (month == 4) .9
+  if (month == 5) 3.8
+  if (month == 6) 5.8
+  if (month == 7) 6.4
+  if (month == 8) 5
+  if (month == 9) 2.4
+}
+
+MDC_0 <- 0
+
+
+
+for (i in 4:9)
+{
+  n <- unname(days_in_month(date(paste0(x[["Year"]], "-0", i, "-01"))))
+  T_mx <- x[[paste0("Tmax0", i)]] # Tmax
+  r_m <- x[[paste0("PPT0", i)]]
+  E_m <- n * (.36 * T_mx + L_f(i))
+  RM_EFF <- .83 * r_m
+  Q_mr <- 3.937 * RM_EFF / (800 * exp(-MDC_0/400))
+  DC_HALF <- MDC_0 + .25 * E_m
+  DC_mr <- DC_HALF - 400 * log(1 + Q_mr)
+  MDC_m <- DC_mr + .25 * E_m
+  MDC <- MDC_0 <- (MDC_0 + MDC_m) / 2
+}
 ```
 
 # Vegetation
-## Load LCC05_BCR6, LCC05_BCR6_NWT
+### Load LCC05_BCR6, LCC05_BCR6_NWT
 ```{r LCC05_GIS}
 #
 # Load LCC05_BCR6
 #
 LCC05_BCR6 <- Cache(
   prepInputs,
-  url = "https://drive.google.com/open?id=1z5sw3Z6tSEANa3xhO73mNzT9nIMhtAsy", 
+  url = "https://drive.google.com/open?id=1SioQYtK4BRloaOJAWCwBLNqV28_baOcA", 
   filename2 = NULL
 )
 
@@ -62,7 +169,7 @@ LCC05_BCR6 <- Cache(
 #
 LCC05_BCR6_NWT <- Cache(
   prepInputs,
-  url = "https://drive.google.com/open?id=1_IjMnvEpghM7hCUNKDrScRamnCXNhKfv",
+  url = "https://drive.google.com/open?id=1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN",
   filename2 = NULL
 )
 ```
@@ -113,9 +220,10 @@ LCC05_BCR6_NWT <- Cache(
 \  
 
 Reclassified as:
+\  
 
 |Description|Code|
-| -------------------------------- |-----:|
+| ---- | -----:|
 |Conifer|1|
 |Crops|2|
 |Deciduous|3|
@@ -129,10 +237,11 @@ Reclassified as:
 |Wetlands|11|
 
 \  
+
 ```{R Reclassify LCC05 39 classes}
 rcl <- matrix(
   #   from,  to,    becomes
-  c(     -1,  0.01,      10, # After visual inspection, likely croplands
+  c(     -1,  0.01,      10, # After visual inspection, likely herbs/shrubs
        0.99,  1.01,       1,
        1.99,  2.01,       3,
        2.99,  3.01,       5,
@@ -153,9 +262,9 @@ rcl <- matrix(
       25.99, 29.01,       2,
       29.99, 31.01,       8,
       31.99, 32.01,      11, # Wetlands (here lichen-spruce bog), waiting for Tati's update
-      32.99, 33.01,      NA,
+      32.99, 33.01,       0, # do not burn
       33.99, 35.01,       4,
-      35.99, 39.01,      NA
+      35.99, 39.01,       0  # do not burn
   ),
   ncol = 3,
   byrow = TRUE
