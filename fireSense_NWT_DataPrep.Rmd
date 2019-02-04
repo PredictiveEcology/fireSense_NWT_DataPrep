@@ -275,41 +275,26 @@ LCC05_BCR6_rcl <- Cache(reclassify, x = LCC05_BCR6, rcl = rcl)
 LCC05_BCR6_NWT_rcl <- Cache(reclassify, x = LCC05_BCR6_NWT, rcl = rcl)
 ```
 
-## Aggregate at 10km resolution
+### Calculate the proportion covered by each class of land cover at 10km resolution
 ```{R}
-#
-# Create an aggregation template which will be used to keep only pixels entirely
-# inside BCR6_NWT
-#
-agg_tmpl <- aggregate(LCC05_BCR6_NWT, fact = 40)
-isWithinBCR6_NWT <- rasterize(BCR6_NWT_VT, agg_tmpl, getCover = TRUE)[] == 1
-agg_tmpl[!isWithinBCR6_NWT] <- NA
+n_lcc <- 12
 
-#
-# Discard pixels of LCC05_BCR6_NWT not entirely inside BCR6_NWT
-#
-LCC05_BCR6_NWT_rcl[is.na(agg_tmpl[])] <- NA
-
-#
-# Compute the proportion of each Land Cover Class
-#
-n_lcc <- 11
-
-test <- lapply(
-  1:n_lcc,
-  function(cl_i)
-  {
-    calc_prop_lcc <- function(x, cl = cl_i, na.rm = TRUE)
+pp_lcc_10k <- 
+  lapply(
+    0:(n_lcc - 1),
+    function(cl_i)
     {
-      sum(x == cl, na.rm = na.rm) / 1600
+      calc_prop_lcc <- function(x, cl = cl_i, na.rm = TRUE)
+      {
+        if (anyNA(x)) return(NA)
+        sum(x == cl, na.rm = na.rm) / 1600
+      }
+      
+      col_name <- paste0("cl", cl_i)
+      
+      tibble(
+        !!col_name := aggregate(LCC05_BCR6_NWT_rcl, fact = 40, fun = calc_prop_lcc)[]
+      )
     }
-    
-    aggregate(LCC05_BCR6_NWT_rcl, fact = 40, fun = calc_prop_lcc)
-  }
-)
-
-#
-
-
-
+  ) %>% bind_cols %>% rowid_to_column(var = "PX_ID") %>% filter_at(2, all_vars(!is.na(.)))
 ```
