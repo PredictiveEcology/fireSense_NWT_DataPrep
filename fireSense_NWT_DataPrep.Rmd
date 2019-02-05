@@ -353,3 +353,30 @@ pp_lcc_10k <-
     }
   ) %>% bind_cols %>% rowid_to_column(var = "PX_ID") %>% filter_at(2, all_vars(!is.na(.)))
 ```
+
+
+# Fire data
+### Prepare point data
+```{R}
+NFDB_PT_BCR6_NWT <- Cache(
+  prepInputs,
+  url = "https://drive.google.com/open?id=1HU2lGMYmMoyXkDVjYLGhvAiC0ZkY-XMg",
+  targetFile = "NFDB_point_20181129_BCR6_NWT.shp",
+  alsoExtract = "similar",
+  fun = sf::st_read
+)
+
+NFDB_PT_BCR6_NWT <- NFDB_PT_BCR6_NWT %>%
+  # Filter fire data (2000 - 2010 period)
+  filter(YEAR >= 2000 & YEAR <= 2010) %>%
+  
+  # Drop columns containing info we don't need
+  select(LATITUDE, LONGITUDE, YEAR, SIZE_HA, CAUSE) %>%
+
+  # Keep only lightning fires
+  filter(CAUSE == "L")
+```
+
+
+
+
