@@ -287,6 +287,49 @@ LCC05_BCR6_rcl <- Cache(reclassify, x = LCC05_BCR6, rcl = rcl)
 LCC05_BCR6_NWT_rcl <- Cache(reclassify, x = LCC05_BCR6_NWT, rcl = rcl)
 ```
 
+### LCC05 with incremental disturbances
+```{R}
+NFDB_PO_BCR6_NWT <- Cache(
+  prepInputs,
+  url = "https://drive.google.com/open?id=15Fl6XCsNTZtA2G3py0Ma5ZTaESWwn622",
+  targetFile = "NFDB_poly_20180726_BCR6_NWT.shp",
+  alsoExtract = "similar",
+  fun = "sf::st_read"
+)
+
+test <- Cache(
+  FUN = lapply,
+  2000:2010,
+  function(year)
+  {
+    rasterize(
+      as(
+        st_union(
+          filter(NFDB_PO_BCR6_NWT, YEAR > (year - 15) & YEAR <= year)  
+        ),
+        "Spatial"
+      ),
+      LCC05_BCR6_NWT, 
+      getCover = TRUE
+    )
+  }
+)
+
+invisible(
+  mapply(
+    test,
+    year = 2000:2010,
+    function(x, year)
+    {
+      LCC05_BCR6_NWT[test[] >= .5] <- 4 # Code for disturbed areas
+      writeRaster(LCC05_BCR6_NWT, filename = paste0("LCC05_BCR6_NWT", year, ".tif"))
+    },
+    SIMPLIFY = FALSE,
+    USE.NAMES = FALSE
+  )
+)
+```
+
 ### Calculate the proportion covered by each class of land cover at 10km resolution
 ```{R}
 n_lcc <- 12
