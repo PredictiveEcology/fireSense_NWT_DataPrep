@@ -14,7 +14,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "fireSense_NWT_DataPrep.Rmd"),
-  reqdPkgs = list("ff"),
+  reqdPkgs = list("raster"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
     defineParameter(name = ".runInitialTime", class = "numeric", default = start(sim),
@@ -83,6 +83,47 @@ doEvent.fireSense_NWT_DataPrep = function(sim, eventTime, eventType)
 ### template initialization
 Init <- function(sim) 
 {
+  #
+  # Reclassify LCC05 at initialisation, so we don't have to do it every year
+  #
+  rcl <- matrix(
+      #    from,   to,   becomes
+    c(        -1,  0.01,      14, # After visual inspection, likely herbs/shrubs
+            0.99,  1.01,       1,
+            1.99,  2.01,       5,
+            2.99,  3.01,       7,
+            3.99,  4.01,       8,
+            4.99,  5.01,       9,
+            5.99, 10.01,       1,
+           10.99, 12.01,       5,
+           12.99, 13.01,       7,
+           13.99, 14.01,       9,
+           14.99, 15.01,       6,
+           15.99, 16.01,      14,
+           16.99, 17.01,      10,
+           17.99, 18.01,      14,
+           18.99, 19.01,      15, # Wetlands, waiting for Tati's update
+           19.99, 20.01,      11,
+           20.99, 24.01,      14,
+           24.99, 25.01,      10,
+           25.99, 29.01,       4,
+           29.99, 31.01,      10,
+           31.99, 32.01,      15, # Wetlands (here lichen-spruce bog), waiting for Tati's update
+           32.99, 33.01,       0, # do not burn
+           33.99, 35.01,       6,
+           35.99, 39.01,       0  # do not burn
+    ),
+    ncol = 3,
+    byrow = TRUE
+  )
+  
+  LCC05_BCR6_NWT_rcl <- cloudCache(
+    reclassify, 
+    x = LCC05_BCR6_NWT, 
+    rcl = rcl, 
+    cloudFolderID = "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkEHDc0"
+  )
+  
   sim <- scheduleEvent(sim, eventTime = P(sim)$.runInitialTime, "fireSense_NWT_DataPrep", "Run")
   invisible(sim)
 }
@@ -90,6 +131,19 @@ Init <- function(sim)
 
 PrepThisYearLCC <- function(sim)
 {
+  Cache(
+    rasterize,
+    x = as(
+      st_union(
+        filter(NFDB_PO_BCR6_NWT, YEAR > (year - 15) & YEAR <= year)
+      ),
+      "Spatial"
+    ),
+    y = LCC05_BCR6_NWT, 
+    getCover = TRUE
+  )
+  
+  
   climateNA_outputs <- read.csv.ffdf(
     file = "C:/climateNA_inputs_1995-2015AMT.csv", 
     header = TRUE, 
@@ -113,7 +167,7 @@ PrepThisYearLCC <- function(sim)
 Run <- function(sim) 
 {
   
-  sim <- PrepThisYearMDC(sim)
+  sim <- PrepThisYearLCC(sim)
   
   if (!is.na(P(sim)$.runInterval)) # Assumes time only moves forward
     sim <- scheduleEvent(sim, currentTime + P(sim)$.runInterval, moduleName, "run")
