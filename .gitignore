@@ -34,3 +34,13 @@ vignettes/*.pdf
 
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
+*.tif
+*.zip
+*.shp
+*.prj
+*.shx
+*.sbn
+*.dbf
+*.tfw
+*.sbx
+*.xml
