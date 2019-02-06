@@ -135,7 +135,7 @@ PrepThisYearLCC <- function(sim)
   
   pp_lcc_10k <- 
     lapply(
-      0:(n_lcc - 1),
+      1:n_lcc,
       function(cl_i)
       {
         calc_prop_lcc <- function(x, cl = cl_i, na.rm = TRUE)
