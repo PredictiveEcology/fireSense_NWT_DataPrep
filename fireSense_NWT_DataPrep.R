@@ -155,6 +155,20 @@ PrepThisYearLCC <- function(sim)
   invisible(sim)
 }
 
+PrepThisYearFire <- function(sim)
+{
+  NFDB_PT_BCR6_NWT <- NFDB_PT_BCR6_NWT %>%
+    # Filter fire data (2000 - 2010 period)
+    filter(YEAR >= 2000 & YEAR <= 2010) %>%
+    
+    # Drop columns containing info we don't need
+    select(LATITUDE, LONGITUDE, YEAR, SIZE_HA, CAUSE) %>%
+    
+    # Keep only lightning fires
+    filter(CAUSE == "L")
+  
+  invisible(sim)
+}
 
 Run <- function(sim) 
 {
