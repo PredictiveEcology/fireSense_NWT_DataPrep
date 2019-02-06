@@ -51,7 +51,11 @@ defineModule(sim, list(
   ),
   outputObjects = bind_rows(
     #createsOutput("objectName", "objectClass", "output object description", ...),
-    createsOutput(objectName = NA, objectClass = NA, desc = NA)
+    createsOutput(
+      objectName = "dataFireSense_NWT", 
+      objectClass = "tibble", 
+      desc = "MDC, land-cover data necessary to train fireSense in the NWT."
+    )
   )
 ))
 
