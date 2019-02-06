@@ -14,7 +14,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "fireSense_NWT_DataPrep.Rmd"),
-  reqdPkgs = list("raster"),
+  reqdPkgs = list("dplyr", "raster", "tibble"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
     defineParameter(name = ".runInitialTime", class = "numeric", default = start(sim),
@@ -131,34 +131,26 @@ Init <- function(sim)
 
 PrepThisYearLCC <- function(sim)
 {
-  Cache(
-    rasterize,
-    x = as(
-      st_union(
-        filter(NFDB_PO_BCR6_NWT, YEAR > (year - 15) & YEAR <= year)
-      ),
-      "Spatial"
-    ),
-    y = LCC05_BCR6_NWT, 
-    getCover = TRUE
-  )
+  n_lcc <- 13
   
-  
-  climateNA_outputs <- read.csv.ffdf(
-    file = "C:/climateNA_inputs_1995-2015AMT.csv", 
-    header = TRUE, 
-    colClasses = c("integer", "integer", "factor", rep("numeric", 171))
-  )
-  
-  climateNA_outputs <- climateNA_outputs[
-    ,
-    vars_select(
-      colnames(climateNA_outputs), 
-      Year, ID1, Latitude, Longitude, 
-      num_range("Tmax", 4:9, 2), num_range("PPT",  4:9, 2)
-    )
-    ]
-  
+  pp_lcc_10k <- 
+    lapply(
+      0:(n_lcc - 1),
+      function(cl_i)
+      {
+        calc_prop_lcc <- function(x, cl = cl_i, na.rm = TRUE)
+        {
+          if (anyNA(x)) return(NA)
+          sum(x == cl, na.rm = na.rm) / 1600
+        }
+        
+        col_name <- paste0("cl", cl_i)
+        
+        tibble(
+          !!col_name := aggregate(LCC05_BCR6_NWT_rcl, fact = 40, fun = calc_prop_lcc)[]
+        )
+      }
+    ) %>% bind_cols %>% rowid_to_column(var = "PX_ID") %>% filter_at(2, all_vars(!is.na(.)))
   
   invisible(sim)
 }
@@ -173,52 +165,6 @@ Run <- function(sim)
     sim <- scheduleEvent(sim, currentTime + P(sim)$.runInterval, moduleName, "run")
   
   invisible(sim)
-}
-
-
-
-### template for save events
-Save <- function(sim) {
-  # ! ----- EDIT BELOW ----- ! #
-  # do stuff for this event
-  sim <- saveFiles(sim)
-
-  # ! ----- STOP EDITING ----- ! #
-  return(invisible(sim))
-}
-
-### template for plot events
-plotFun <- function(sim) {
-  # ! ----- EDIT BELOW ----- ! #
-  # do stuff for this event
-  #Plot(sim$object)
-
-  # ! ----- STOP EDITING ----- ! #
-  return(invisible(sim))
-}
-
-### template for your event1
-Event1 <- function(sim) {
-  # ! ----- EDIT BELOW ----- ! #
-  # THE NEXT TWO LINES ARE FOR DUMMY UNIT TESTS; CHANGE OR DELETE THEM.
-  # sim$event1Test1 <- " this is test for event 1. " # for dummy unit test
-  # sim$event1Test2 <- 999 # for dummy unit test
-
-
-  # ! ----- STOP EDITING ----- ! #
-  return(invisible(sim))
-}
-
-### template for your event2
-Event2 <- function(sim) {
-  # ! ----- EDIT BELOW ----- ! #
-  # THE NEXT TWO LINES ARE FOR DUMMY UNIT TESTS; CHANGE OR DELETE THEM.
-  # sim$event2Test1 <- " this is test for event 2. " # for dummy unit test
-  # sim$event2Test2 <- 777  # for dummy unit test
-
-
-  # ! ----- STOP EDITING ----- ! #
-  return(invisible(sim))
 }
 
 .inputObjects <- function(sim) {
@@ -236,7 +182,7 @@ Event2 <- function(sim) {
   #   sim$map <- Cache(prepInputs, extractURL('map')) # download, extract, load file from url in sourceURL
   # }
 
-  #cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
+  cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
