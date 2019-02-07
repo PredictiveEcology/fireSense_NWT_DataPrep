@@ -115,6 +115,8 @@ prep_ClimateNA_inputs <- function(res)
   }
 }
 
+rasterOptions(chunksize = 1e10) # Otherwise takes ages!
+
 prep_ClimateNA_inputs("250m")
 prep_ClimateNA_inputs("1km")
 
