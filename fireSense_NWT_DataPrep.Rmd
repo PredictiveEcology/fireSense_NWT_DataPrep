@@ -86,7 +86,7 @@ setPaths(
   cachePath = "H:/Jean/cache",
   inputPath = "H:/Jean/inputs",
   outputPath = "H:/Jean/outputs",
-  modulePath = "\\\\tsclient\\C/Users/jemar270/Documents/GitHub",
+  modulePath = "\\\\tsclient\\C/Users/jemar270/Documents/GitHub"
 )
 
 getPaths() # shows where the 4 relevant paths are
@@ -100,7 +100,8 @@ parameters <- list(
 cloudFolderID <- "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkEHDc0"
 
 # MDC_BCR6_NWT_250m <- raster::raster(nrow = 1000, ncol = 1000, res = 250, vals = 1)
-MDC_BCR6_NWT_250 <- raster::raster("MDC.tif")
+tmpl <- raster::raster("MDC.tif")
+MDC_BCR6_NWT_250 <- raster::stack(lapply(1:6, function(i)tmpl))
 
 LCC05_BCR6_NWT <- Cache(
   prepInputs, 
