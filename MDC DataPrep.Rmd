@@ -80,6 +80,11 @@ prep_ClimateNA_inputs <- function(res)
   
   for (i in 1:np)
   {
+    f <- file(
+      paste0("climateNA_inputs", i, "_", res, ".csv"), 
+      "wb" # Use binary mode to prevent OS dependent behaviour for eol
+    )
+    
     write.csv(
       (
         bind_cols(
@@ -101,10 +106,12 @@ prep_ClimateNA_inputs <- function(res)
           mutate(ID1 = withinBCR6[wp == i], ID2 = "") %>%
           dplyr::select(ID1, ID2, lat, long, el)
       ),
-      file = paste0("climateNA_inputs", i, "_", res, ".csv"),
+      file = f,
       row.names = FALSE,
       eol = "\r\n" # ClimateNA is windows software
     )
+    
+    close(f)
   }
 }
 
