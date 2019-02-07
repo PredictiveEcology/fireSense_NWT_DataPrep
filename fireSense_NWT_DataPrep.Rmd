@@ -70,136 +70,92 @@ Reclassified as:
 |Shrub|10|
 |Wetlands|11|
 
-\  
 
-```{R Reclassify LCC05 39 classes}
-rcl <- matrix(
-  #   from,   to,   becomes
-  c(     -1,  0.01,      14, # After visual inspection, likely herbs/shrubs
-       0.99,  1.01,       1,
-       1.99,  2.01,       5,
-       2.99,  3.01,       7,
-       3.99,  4.01,       8,
-       4.99,  5.01,       9,
-       5.99, 10.01,       1,
-      10.99, 12.01,       5,
-      12.99, 13.01,       7,
-      13.99, 14.01,       9,
-      14.99, 15.01,       6,
-      15.99, 16.01,      14,
-      16.99, 17.01,      10,
-      17.99, 18.01,      14,
-      18.99, 19.01,      15, # Wetlands, waiting for Tati's update
-      19.99, 20.01,      11,
-      20.99, 24.01,      14,
-      24.99, 25.01,      10,
-      25.99, 29.01,       4,
-      29.99, 31.01,      10,
-      31.99, 32.01,      15, # Wetlands (here lichen-spruce bog), waiting for Tati's update
-      32.99, 33.01,       0, # do not burn
-      33.99, 35.01,       6,
-      35.99, 39.01,       0  # do not burn
-  ),
-  ncol = 3,
-  byrow = TRUE
+# Usage
+
+```{r module_usage}
+setwd("H:/Jean")
+
+library(SpaDES)
+
+
+setPaths(
+  cachePath = "H:/Jean/cache",
+  inputPath = "H:/Jean/inputs",
+  outputPath = "H:/Jean/outputs",
+  modulePath = "\\\\tsclient\\C/Users/jemar270/Documents/GitHub",
 )
 
+getPaths() # shows where the 4 relevant paths are
 
-LCC05_BCR6_rcl <- Cache(reclassify, x = LCC05_BCR6, rcl = rcl)
-LCC05_BCR6_NWT_rcl <- Cache(reclassify, x = LCC05_BCR6_NWT, rcl = rcl)
-```
+times <- list(start = 2000, end = 2010)
 
-### LCC05 with incremental disturbances
-```{R}
+parameters <- list(
+  fireSense_NWT_DataPrep = list(res = 10000)
+)
+
+# MDC_BCR6_NWT_250m <- raster::raster(nrow = 1000, ncol = 1000, res = 250, vals = 1)
+MDC_BCR6_NWT_250 <- raster::raster("MDC.tif")
+
+LCC05_BCR6_NWT <- Cache(
+  prepInputs, 
+  url = "https://drive.google.com/open?id=1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN"
+)
+
 NFDB_PO_BCR6_NWT <- Cache(
-  prepInputs,
+  prepInputs, 
   url = "https://drive.google.com/open?id=15Fl6XCsNTZtA2G3py0Ma5ZTaESWwn622",
-  targetFile = "NFDB_poly_20180726_BCR6_NWT.shp",
-  alsoExtract = "similar",
   fun = "sf::st_read"
 )
 
-prop_disturbed <- lapply(
-  2000:2010,
-  function(year)
-  {
-    Cache(
-      rasterize,
-      x = as(
-        st_union(
-          filter(NFDB_PO_BCR6_NWT, YEAR > (year - 15) & YEAR <= year)
-        ),
-        "Spatial"
-      ),
-      y = LCC05_BCR6_NWT, 
-      getCover = TRUE
-    )
-  }
-)
-
-invisible(
-  mapply(
-    prop_disturbed,
-    year = 2000:2010,
-    function(x, year)
-    {
-      LCC05_BCR6_NWT_rcl[x[] >= .5] <- 6 # Code for disturbed areas
-      writeRaster(LCC05_BCR6_NWT_rcl, filename = paste0("LCC05_BCR6_NWT_rcl_", year, ".tif"))
-    },
-    SIMPLIFY = FALSE,
-    USE.NAMES = FALSE
-  )
-)
-```
-
-
-### Calculate the proportion covered by each class of land cover at 10km resolution, 2000-2010 period
-```{R}
-n_lcc <- 12
-
-pp_lcc_10k <- 
-  lapply(
-    0:(n_lcc - 1),
-    function(cl_i)
-    {
-      calc_prop_lcc <- function(x, cl = cl_i, na.rm = TRUE)
-      {
-        if (anyNA(x)) return(NA)
-        sum(x == cl, na.rm = na.rm) / 1600
-      }
-      
-      col_name <- paste0("cl", cl_i)
-      
-      tibble(
-        !!col_name := aggregate(LCC05_BCR6_NWT_rcl, fact = 40, fun = calc_prop_lcc)[]
-      )
-    }
-  ) %>% bind_cols %>% rowid_to_column(var = "PX_ID") %>% filter_at(2, all_vars(!is.na(.)))
-```
-
-
-# Fire data
-### Prepare point data
-```{R}
 NFDB_PT_BCR6_NWT <- Cache(
-  prepInputs,
+  prepInputs, 
   url = "https://drive.google.com/open?id=1HU2lGMYmMoyXkDVjYLGhvAiC0ZkY-XMg",
-  targetFile = "NFDB_point_20181129_BCR6_NWT.shp",
-  alsoExtract = "similar",
-  fun = sf::st_read
+  fun = "sf::st_read"
 )
 
-NFDB_PT_BCR6_NWT <- NFDB_PT_BCR6_NWT %>%
-  # Filter fire data (2000 - 2010 period)
-  filter(YEAR >= 2000 & YEAR <= 2010) %>%
-  
-  # Drop columns containing info we don't need
-  select(LATITUDE, LONGITUDE, YEAR, SIZE_HA, CAUSE) %>%
+modules <- list("fireSense_NWT_DataPrep")
+objects <- list(
+  MDC_BCR6_NWT_250m = MDC_BCR6_NWT_250m,
+  LCC05_BCR6_NWT = LCC05_BCR6_NWT,
+  NFDB_PO_BCR6_NWT = NFDB_PO_BCR6_NWT,
+  NFDB_PT_BCR6_NWT = NFDB_PT_BCR6_NWT
+)
 
-  # Keep only lightning fires
-  filter(CAUSE == "L")
+mySim <- simInit(
+  times = times, 
+  params = parameters, 
+  modules = modules,
+  objects = objects
+)
+
+mySimOut <- spades(mySim)
 ```
 
+# Events
 
+Describe what happens for each event type.
 
+## Plotting
+
+Write what is plotted.
+
+## Saving
+
+Write what is saved.
+
+# Data dependencies
+
+## Input data
+
+How to obtain input data, and a description of the data required by the module.
+If `sourceURL` is specified, `downloadData("fireSense_NWT_DataPrep", "path/to/modules/dir")` may be sufficient.
+
+## Output data
+
+Description of the module outputs.
+
+# Links to other modules
+
+Describe any anticipated linkages to other modules.
 
