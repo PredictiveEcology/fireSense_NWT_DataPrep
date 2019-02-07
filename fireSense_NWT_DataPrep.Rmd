@@ -9,6 +9,7 @@ output: pdf_document
 The purpose of this module is to prepare the climate and vegetation data needed to run the fireSense modules for BCR6 and BCR6 contained in the Northwest Territories.
 
 ### Reclassify LCC2005 (39 classes)
+LCC05 contains 39 distinct land cover classes:
 
 |Description|Code|
 | ------------------------------------------- |-----:|
@@ -53,22 +54,24 @@ The purpose of this module is to prepare the climate and vegetation data needed 
 |Snow/ice|39|
 \  
 
-Reclassified as:
+which are reclassified by this module as:
 \  
 
 |Description|Code|
 | ---- | -----:|
-|Conifer|1|
-|Crops|2|
-|Deciduous|3|
-|Disturbed|4|
-|Mixed C-dom|5|
-|Mixed Young|6|
-|Mixed F-dom|7|
-|Non-vascular|8|
-|Open-conifer|9|
-|Shrub|10|
-|Wetlands|11|
+|Conifer-HighDensity|1|
+|Conifer-MediumDensity|2|
+|Conifer-LowDensity|3|
+|Crops|4|
+|Deciduous|5|
+|Disturbed|6|
+|Mixed Conifer-dominant|7|
+|Mixed Young|8|
+|Mixed Hardwood-dominant|9|
+|Non-vascular|10|
+|Open-conifer|11|
+|Shrub|12|
+|Wetlands|13|
 
 
 # Usage
