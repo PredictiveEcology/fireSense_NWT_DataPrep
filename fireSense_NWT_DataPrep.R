@@ -195,11 +195,12 @@ PrepThisYearLCC <- function(sim)
   #
   ## Update LCC05
   #
-  Cache(
-    `[[<-`, 
-    LCC05_BCR6_NWT_rcl, 
-    prop_disturbed[] >= .5, 
-    6 # Code for disturbed areas
+  mod[["LCC05_BCR6_NWT_rcl"]] <- Cache(
+    `[<-`,
+    useCache = "overwrite",
+    x = mod[["LCC05_BCR6_NWT_rcl"]], 
+    i = prop_disturbed[] >= .5, 
+    value = 6 # Code for disturbed areas
   ) 
   
   n_lcc <- 13
