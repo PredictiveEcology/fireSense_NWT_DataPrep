@@ -14,7 +14,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "fireSense_NWT_DataPrep.Rmd"),
-  reqdPkgs = list("dplyr", "raster", "sf", "tibble"),
+  reqdPkgs = list("dplyr", "raster", "rlang", "sf", "tibble"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
     defineParameter(name = "res", class = "numeric", default = 10000,
@@ -41,9 +41,9 @@ defineModule(sim, list(
     ),
     expectsInput(
       objectName = "MDC_BCR6_NWT_250m",
-      objectClass = "RasterLayer",
+      objectClass = "RasterStack",
       sourceURL = NA_character_,
-      desc = "Monthly Drought Code within BCR6 as contained in the Northwest Territories."
+      desc = "Monthly Drought Code (April to September) within BCR6 as contained in the Northwest Territories."
     ),
     expectsInput(
       objectName = "LCC05_BCR6_NWT",
@@ -67,9 +67,9 @@ defineModule(sim, list(
   outputObjects = bind_rows(
     #createsOutput("objectName", "objectClass", "output object description", ...),
     createsOutput(
-      objectName = "dataFireSense_NWT", 
-      objectClass = "tibble", 
-      desc = "MDC, land-cover data necessary to train fireSense in the NWT."
+      objectName = "dataFireSense_FireFrequency", 
+      objectClass = "data.frame", 
+      desc = "Contains MDC, land-cover, fire data necessary to train fireSense_FireFrequency for BCR6 as contained in the Northwest Territories."
     )
   )
 ))
@@ -136,17 +136,17 @@ Init <- function(sim)
     byrow = TRUE
   )
   
-  mod$LCC05_BCR6_NWT_rcl <- cloudCache(
+  mod[["LCC05_BCR6_NWT_rcl"]] <- cloudCache(
     reclassify, 
     x = sim[["LCC05_BCR6_NWT"]], 
     rcl = rcl, 
     cloudFolderID = sim[["cloudFolderID"]]
   )
   
-  mod$RTM <- Cache(
+  mod[["RTM"]] <- Cache(
     aggregate,
-    mod$LCC05_BCR6_NWT_rcl,
-    fact = P(sim)$res / xres(mod$LCC05_BCR6_NWT_rcl),
+    mod[["LCC05_BCR6_NWT_rcl"]],
+    fact = P(sim)$res / xres(mod[["LCC05_BCR6_NWT_rcl"]]),
     fun = function(x, ...) if (anyNA(x)) NA else 1
   )
   
@@ -156,12 +156,13 @@ Init <- function(sim)
 
 PrepThisYearMDC <- function(sim)
 {
-  mod$MDC <- Cache(
-    postProcess,
+  mod$MDC <- postProcess(
     x = sim[["MDC_BCR6_NWT_250m"]],
     rasterToMatch = mod$RTM,
     maskWithRTM = TRUE,
-    useCache = FALSE
+    method = "bilinear",
+    useCache = FALSE,
+    filename2 = NULL
   )
   
   invisible(sim)
@@ -197,11 +198,12 @@ PrepThisYearLCC <- function(sim)
   #
   mod[["LCC05_BCR6_NWT_rcl"]] <- Cache(
     `[<-`,
-    useCache = "overwrite",
     x = mod[["LCC05_BCR6_NWT_rcl"]], 
     i = prop_disturbed[] >= .5, 
     value = 6 # Code for disturbed areas
   ) 
+  # DEBUG
+  writeRaster(mod[["LCC05_BCR6_NWT_rcl"]], filename = paste0("LCC05_BCR6_NWT_rcl", year, ".tif"), overwrite=TRUE)
   
   n_lcc <- 13
   
@@ -218,41 +220,43 @@ PrepThisYearLCC <- function(sim)
         
         col_name <- paste0("cl", cl_i)
         
-        Cache(
-          tibble,
-          !!col_name := aggregate(LCC05_BCR6_NWT_rcl, fact = P(sim)$res, fun = calc_prop_lcc)[]
+        tibble( 
+          !!col_name := aggregate(
+            mod[["LCC05_BCR6_NWT_rcl"]], 
+            fact = P(sim)$res / xres(mod[["LCC05_BCR6_NWT_rcl"]]), 
+            fun = calc_prop_lcc
+          )[]
         )
       }
-    ) %>% bind_cols %>% rowid_to_column(var = "PX_ID") %>% filter_at(2, all_vars(!is.na(.)))
+    ) %>% bind_cols %>% filter_at(2, all_vars(!is.na(.)))
   
   invisible(sim)
 }
 
 PrepThisYearFire <- function(sim)
 {
-  browser()
+  currentYear <- current(sim, "year")[["eventTime"]]
   
   NFDB_PT_BCR6_NWT <- NFDB_PT_BCR6_NWT %>%
     # Filter fire data for the current year
-    filter(YEAR == current(sim, "year")[["eventTime"]]) %>%
+    dplyr::filter(YEAR == currentYear) %>%
     
     # Drop columns containing info we don't need
-    select(LATITUDE, LONGITUDE, YEAR, SIZE_HA, CAUSE) %>%
+    dplyr::select(LATITUDE, LONGITUDE, YEAR, SIZE_HA, CAUSE) %>%
     
     # Keep only lightning fires
-    filter(CAUSE == "L")
+    dplyr::filter(CAUSE == "L")
   
-  grid <- st_as_sf(
-    rasterToPolygons(
-      mod$RTM
-    )
+  RTM_VT <- st_as_sf(rasterToPolygons(mod[["RTM"]]))
+  RTM_VT[["PX_ID"]] <- which(!is.na(mod[["RTM"]][]))
+  
+  mod[["fires"]] <- st_set_geometry(
+    mutate(
+      st_join(RTM_VT, NFDB_PT_BCR6_NWT),
+      YEAR = currentYear
+    ), 
+    NULL
   )
-  
-  st_intersection(
-    grid, 
-  )
-  
-  mod$fires <- 
   
   invisible(sim)
 }
@@ -263,13 +267,22 @@ Run <- function(sim)
   sim <- PrepThisYearLCC(sim)
   sim <- PrepThisYearFire(sim)
   
-  bind_cols(
-    mod$MDC[],
-    mod$pp_lcc,
-    mod$fires[]
+  # Prepare input data for the fireSense_FireFrequency module
+  sim[["dataFireSense_FireFrequency"]] <- bind_cols(
+    mod[["fires"]] %>%
+      group_by(PX_ID, YEAR) %>%
+      summarise(N_FIRES = n()),
+    rename(
+      as_tibble(mod[["MDC"]][]),
+      MDC04 = 1,
+      MDC05 = 2,
+      MDC06 = 3,
+      MDC07 = 4,
+      MDC08 = 5,
+      MDC09 = 6
+    ),
+    mod[["pp_lcc"]]
   )
-  
-  # Merge all together
   
   if (!is.na(P(sim)$.runInterval)) # Assumes time only moves forward
     sim <- scheduleEvent(sim, current(sim, "year")[["eventTime"]] + P(sim)$.runInterval, "fireSense_NWT_DataPrep", "run")
