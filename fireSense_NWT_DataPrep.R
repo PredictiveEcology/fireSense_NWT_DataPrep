@@ -156,13 +156,21 @@ Init <- function(sim)
 
 PrepThisYearMDC <- function(sim)
 {
-  mod$MDC <- postProcess(
-    x = sim[["MDC_BCR6_NWT_250m"]],
-    rasterToMatch = mod$RTM,
-    maskWithRTM = TRUE,
-    method = "bilinear",
-    useCache = FALSE,
-    filename2 = NULL
+  
+  currentYear <- current(sim, "year")[["eventTime"]]
+  
+  mod[["MDC"]] <- Cache(
+    stack,
+    lapply(
+      unstack(sim[["MDC_BCR6_NWT_250m"]]),
+      postProcess,
+      rasterToMatch = mod$RTM,
+      maskWithRTM = TRUE,
+      method = "bilinear",
+      useCache = FALSE,
+      filename2 = paste0("MDC_BCR6_NWT_250m", currentYear, ".tif"),
+      overwrite = TRUE
+    )
   )
   
   invisible(sim)
@@ -266,6 +274,8 @@ Run <- function(sim)
   sim <- PrepThisYearMDC(sim)
   sim <- PrepThisYearLCC(sim)
   sim <- PrepThisYearFire(sim)
+
+  px_id <- distinct(mod[["fires"]], PX_ID)[["PX_ID"]]
   
   # Prepare input data for the fireSense_FireFrequency module
   sim[["dataFireSense_FireFrequency"]] <- bind_cols(
@@ -273,7 +283,7 @@ Run <- function(sim)
       group_by(PX_ID, YEAR) %>%
       summarise(N_FIRES = n()),
     rename(
-      as_tibble(mod[["MDC"]][]),
+      as_tibble(mod[["MDC"]][px_id]),
       MDC04 = 1,
       MDC05 = 2,
       MDC06 = 3,
