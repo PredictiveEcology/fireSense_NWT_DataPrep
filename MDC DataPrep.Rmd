@@ -133,7 +133,9 @@ read_ClimateNA_outputs <- function(files)
       files,
       read.csv.ffdf,
       header = TRUE,
-      colClasses = c("integer", "integer", "factor", rep("numeric", 171))
+      colClasses = c("integer", "integer", "factor", rep("numeric", 171)),
+      first.rows = 1e6,
+      next.rows = 1e6
     )
   )
   
