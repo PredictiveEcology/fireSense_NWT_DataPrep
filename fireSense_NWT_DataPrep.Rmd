@@ -94,6 +94,8 @@ parameters <- list(
   fireSense_NWT_DataPrep = list(res = 10000)
 )
 
+cloudFolderID <- "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkEHDc0"
+
 # MDC_BCR6_NWT_250m <- raster::raster(nrow = 1000, ncol = 1000, res = 250, vals = 1)
 MDC_BCR6_NWT_250 <- raster::raster("MDC.tif")
 
@@ -116,6 +118,7 @@ NFDB_PT_BCR6_NWT <- Cache(
 
 modules <- list("fireSense_NWT_DataPrep")
 objects <- list(
+  cloudFolderID = cloudFolderID,
   MDC_BCR6_NWT_250m = MDC_BCR6_NWT_250m,
   LCC05_BCR6_NWT = LCC05_BCR6_NWT,
   NFDB_PO_BCR6_NWT = NFDB_PO_BCR6_NWT,

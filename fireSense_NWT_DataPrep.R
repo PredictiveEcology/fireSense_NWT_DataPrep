@@ -34,6 +34,12 @@ defineModule(sim, list(
   inputObjects = bind_rows(
     #expectsInput("objectName", "objectClass", "input object description", sourceURL, ...),
     expectsInput(
+      objectName = "cloudFolderID",
+      objectClass = "character",
+      sourceURL = NA_character_,
+      desc = "GDrive folder ID for cloud caching."
+    ),
+    expectsInput(
       objectName = "MDC_BCR6_NWT_250m",
       objectClass = "RasterLayer",
       sourceURL = NA_character_,
@@ -134,7 +140,7 @@ Init <- function(sim)
     reclassify, 
     x = sim[["LCC05_BCR6_NWT"]], 
     rcl = rcl, 
-    cloudFolderID = "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkEHDc0"
+    cloudFolderID = sim[["cloudFolderID"]]
   )
   
   mod$RTM <- Cache(
