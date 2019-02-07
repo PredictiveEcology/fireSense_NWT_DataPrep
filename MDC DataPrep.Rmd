@@ -23,8 +23,7 @@ options(reproducible.overwrite = TRUE)
 knitr::opts_chunk$set(eval = FALSE)
 ```
 
-# Climate / Fire weather
-### Prepare ClimateNA inputs
+# Prepare ClimateNA inputs - 250m and 1km resolution
 ```{R}
 #
 # Need to have 3 things: lat, long, elevation
@@ -32,58 +31,81 @@ knitr::opts_chunk$set(eval = FALSE)
 #
 ## Load BCR6_RT, raster version of the BCR6 study area
 #
-BCR6_RT <- prepInputs(
+BCR6_RT_250m <- prepInputs(
   url = "https://drive.google.com/open?id=1sEiXKnAOCi-f1BF7b4kTg-6zFlGr0YOH",
   targetFile = "bcr6.tif"
 )
 
-DEM_BCR6 <- prepInputs(
+DEM_BCR6_250m <- prepInputs(
   url = "https://drive.google.com/open?id=1_7L8QDozDtGSuYWBKKkgzCABocR9lWVN"
 )
 
-withinBCR6 <- !is.na(BCR6_RT[])
-elev <- DEM_BCR6[withinBCR6]
+#
+## Produce 1km versions of BCR6 and DEM
+#
+BCR6_RT_1km <- Cache(
+  aggregate,
+  BCR6_RT_250m,
+  fact = 4
+)
 
-#
-## Parts of the BCR6 where we have no data, after manual inspection, they are pixels
-## in the sea. Confirmed by Diana. Remove these pixels from BCR6.
-#
-withinBCR6 <- which(withinBCR6)[!is.na(elev)]
-elev <- elev[!is.na(elev)]
+DEM_BCR6_1km <- Cache(
+  postProcess,
+  DEM_BCR6_250m,
+  method = "bilinear",
+  rasterToMatch = BCR6_RT_1km,
+  maskWithRTM = TRUE
+)
 
-#
-# Write lat, long, elev to csv
-#
-np <- 8 # Split in 8 parts to stay within memory limits and because we have 8 threads available...
-wp <- rep(1:np, length.out = length(elev))
-
-for (i in 1:np)
+prep_ClimateNA_inputs <- function(res)
 {
-  write.csv(
-    (
-      bind_cols(
-        (
-          st_as_sf(
-            as_tibble(
-              raster::xyFromCell(BCR6_RT, withinBCR6[wp == i])
-            ),
-            coords = c("x", "y"),
-            crs = proj4string(DEM_BCR6)
-          ) %>%
-            st_transform(crs = 4326) %>%
-            st_coordinates() %>%
-            as_tibble() %>%
-            rename(lat = Y, long = X)
-        ),
-        tibble(el = elev[wp == i])
-      ) %>%
-        mutate(ID1 = withinBCR6[wp == i], ID2 = "") %>%
-        dplyr::select(ID1, ID2, lat, long, el)
-    ),
-    file = paste0("climateNA_inputs", i, ".csv"),
-    row.names = FALSE,
-    eol = "\r\n" # ClimateNA is windows software
-  )
+  BCR6 <- get(paste0("BCR6_RT_", res))
+  DEM <- get(paste0("DEM_BCR6_", res))
+  
+  withinBCR6 <- !is.na(BCR6[])
+  elev <- DEM[withinBCR6]
+  
+  #
+  ## Parts of the BCR6 where we have no data, after manual inspection, they are pixels
+  ## in the sea. Confirmed by Diana. Remove these pixels from BCR6.
+  #
+  withinBCR6 <- which(withinBCR6)[!is.na(elev)]
+  elev <- elev[!is.na(elev)]
+  
+  #
+  # Write lat, long, elev to csv
+  #
+  np <- 8 # Split in 8 parts to stay within memory limits and because we have 8 threads available...
+  wp <- rep(1:np, length.out = length(elev))
+  
+  for (i in 1:np)
+  {
+    write.csv(
+      (
+        bind_cols(
+          (
+            st_as_sf(
+              as_tibble(
+                raster::xyFromCell(BCR6, withinBCR6[wp == i])
+              ),
+              coords = c("x", "y"),
+              crs = proj4string(DEM)
+            ) %>%
+              st_transform(crs = 4326) %>%
+              st_coordinates() %>%
+              as_tibble() %>%
+              rename(lat = Y, long = X)
+          ),
+          tibble(el = elev[wp == i])
+        ) %>%
+          mutate(ID1 = withinBCR6[wp == i], ID2 = "") %>%
+          dplyr::select(ID1, ID2, lat, long, el)
+      ),
+      file = paste0("climateNA_inputs", i, "_", res, ".csv"),
+      row.names = FALSE,
+      eol = "\r\n" # ClimateNA is windows software
+    )
+  }
 }
 ```
 
