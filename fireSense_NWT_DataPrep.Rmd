@@ -101,7 +101,7 @@ cloudFolderID <- "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkE
 
 # MDC_BCR6_NWT_250m <- raster::raster(nrow = 1000, ncol = 1000, res = 250, vals = 1)
 tmpl <- raster::raster("MDC.tif")
-MDC_BCR6_NWT_250 <- raster::stack(lapply(1:6, function(i)tmpl))
+MDC_BCR6_NWT_250m <- raster::stack(lapply(1:6, function(i)tmpl))
 
 LCC05_BCR6_NWT <- Cache(
   prepInputs, 
