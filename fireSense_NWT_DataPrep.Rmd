@@ -1,6 +1,6 @@
 ---
 title: "fireSense_NWT_DataPrep"
-author: ""
+author: "Jean Marchal"
 date: "06 February 2019"
 output: pdf_document
 ---
