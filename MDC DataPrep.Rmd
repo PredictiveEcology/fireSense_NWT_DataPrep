@@ -11,6 +11,7 @@ The purpose of this file is to document how we produced annual Monthly Drought C
 ```{r packages, message=FALSE}
 library(dplyr)
 library(ff)
+library(ffbase)
 library(lubridate)
 library(raster)
 library(reproducible)
@@ -30,37 +31,58 @@ knitr::opts_chunk$set(eval = FALSE)
 #
 #
 ## Load BCR6_RT, raster version of the BCR6 study area
+##      BCR6_NWT_RT, raster version of the BCR6 as contained in the Northwest territories
+##      DEM_BCR6, Digital elevation model for BCR6
+##      DEM_BCR6_NWT, Digital elevation model for BCR6 as contained in the Northwest territories
 #
-BCR6_RT_250m <- prepInputs(
+
+# BCR6_RT
+BCR6_250m <- Cache(
+  prepInputs,
   url = "https://drive.google.com/open?id=1sEiXKnAOCi-f1BF7b4kTg-6zFlGr0YOH",
   targetFile = "bcr6.tif"
 )
 
-DEM_BCR6_250m <- prepInputs(
+# BCR6_NWT_RT
+BCR6_NWT_RT <- Cache(
+  prepInputs,
+  url = "https://drive.google.com/open?id=1NIjFbkckG3sewkTqPGaBGQDQLboPQ0wc"
+)
+
+# DEM_BCR6
+DEM_250m <- Cache(
+  prepInputs,
   url = "https://drive.google.com/open?id=1_7L8QDozDtGSuYWBKKkgzCABocR9lWVN"
+)
+
+# DEM_BCR6_NWT
+DEM_BCR6_NWT <- Cache(
+  prepInputs,
+  url = "https://drive.google.com/open?id=1SKnXVqUD10_VdemQaPaz9MrWiNZzK7VY"
 )
 
 #
 ## Produce 1km versions of BCR6 and DEM
 #
-BCR6_RT_1km <- Cache(
+BCR6_1km <- Cache(
   aggregate,
-  BCR6_RT_250m,
+  BCR6_NWT_RT,
   fact = 4
 )
 
-DEM_BCR6_1km <- Cache(
+DEM_1km <- Cache(
   postProcess,
-  DEM_BCR6_250m,
+  DEM_BCR6_NWT,
   method = "bilinear",
-  rasterToMatch = BCR6_RT_1km,
-  maskWithRTM = TRUE
+  rasterToMatch = BCR6_1km,
+  maskWithRTM = TRUE,
+  filename2 = NULL
 )
 
 prep_ClimateNA_inputs <- function(res)
 {
-  BCR6 <- get(paste0("BCR6_RT_", res))
-  DEM <- get(paste0("DEM_BCR6_", res))
+  BCR6 <- get(paste0("BCR6_", res))
+  DEM <- get(paste0("DEM_", res))
   
   withinBCR6 <- !is.na(BCR6[])
   elev <- DEM[withinBCR6]
@@ -119,40 +141,92 @@ rasterOptions(chunksize = 1e10) # Otherwise takes ages!
 
 prep_ClimateNA_inputs("250m")
 prep_ClimateNA_inputs("1km")
-
 ```
 
 # Read and filter ClimateNA outputs
 Climate variables are described in the [AdaptWest paper](https://dx.doi.org/10.1371/journal.pone.0156720)
-```{R}
+```{R, message=FALSE}
 # Add a check for NA (-9999 value)
 
 read_ClimateNA_outputs <- function(files)
 {
   climateNA_outputs <- do.call(
-    "rbind",
+    "ffdfrbind.fill",
     lapply(
       files,
-      read.csv.ffdf,
-      header = TRUE,
-      colClasses = c("integer", "integer", "factor", rep("numeric", 171)),
-      first.rows = 1e6,
-      next.rows = 1e6
+      function(file)
+      {
+        climateNA_outputs <- read.csv.ffdf(
+          file = file,
+          header = TRUE,
+          colClasses = c("integer", "integer", "factor", rep("numeric", 171)),
+          # nrows = 1000,
+          first.rows = 1e6,
+          next.rows = 1e6,
+          VERBOSE = TRUE
+        )
+        
+        climateNA_outputs <- climateNA_outputs[
+          vars_select(
+            colnames(climateNA_outputs), 
+            Year, ID1, Latitude, Longitude, 
+            num_range("Tmax", 4:9, 2), num_range("PPT",  4:9, 2)
+          )
+        ]
+      }
     )
   )
   
-  climateNA_outputs[
-    ,
-    vars_select(
-      colnames(climateNA_outputs), 
-      Year, ID1, Latitude, Longitude, 
-      num_range("Tmax", 4:9, 2), num_range("PPT",  4:9, 2)
-    )
-  ]
+  for (i in 4:9)
+  {
+    climateNA_outputs[[paste0("Tmax0", i)]][climateNA_outputs[[paste0("Tmax0", i)]][] == -9999] <- NA
+    climateNA_outputs[[paste0("PPT0", i)]][climateNA_outputs[[paste0("PPT0", i)]][] == -9999] <- NA
+  }
+  
+  # 
+  # 
+  # climateNA_outputs[
+  #   vars_select(
+  #     colnames(climateNA_outputs),
+  #     num_range("Tmax", 4:9, 2), num_range("PPT",  4:9, 2)
+  #   )
+  # ] <- do.call(
+  #   "cbind",
+  #   lapply(
+  #     climateNA_outputs[
+  #       vars_select(
+  #         colnames(climateNA_outputs),
+  #         num_range("Tmax", 4:9, 2), num_range("PPT",  4:9, 2)
+  #       )
+  #     ],
+  #     function(x)
+  #     {
+  #       x[x[] == -9999] <- NA # NoData are encoded as -9999
+  #       x
+  #     }
+  #   )
+  # )
+  
+  climateNA_outputs
 }
 
-climateNA_outputs_250m <- read_ClimateNA_outputs(dir(pattern = "climateNA_outputs_.*_250m[.]csv$"))
-climateNA_outputs_1km <- read_ClimateNA_outputs(dir(pattern = "climateNA_outputs_.*_1km[.]csv$"))
+climateNA_Outputs_FD <- "F:/NWT/Climate/" # Folder where climateNA_outputs are stored
+
+climateNA_outputs_250m <- read_ClimateNA_outputs(
+  dir(
+    path = climateNA_Outputs_FD, 
+    pattern = "climateNA_outputs.*_250m[.]csv$", 
+    full.names = TRUE
+  )
+)
+
+# climateNA_outputs_1km <- read_ClimateNA_outputs(
+#   dir(
+#     path = climateNA_Outputs_FD, 
+#     pattern = "climateNA_outputs.*_1km[.]csv$", 
+#     full.names = TRUE
+#   )
+# )
 ```
 
 # Calculate MDC (April - September)
@@ -182,6 +256,9 @@ Abbreviations:
   * $T_{mx}$: monthly mean of daily max temperatures
 
 ```{R}
+
+climateNA_outputs_250m -> climateNA_outputs2
+
 calc_MDC <- function(climateNA_outputs)
 {
   # Day length adjustement L_f in Drought Code (taken from Van Wagner 1987)
@@ -197,24 +274,35 @@ calc_MDC <- function(climateNA_outputs)
     )[[as.character(month)]]
   }
   
-  MDC_0 <- 0
-
+  MDC_0 <- ff(0, length = nrow(climateNA_outputs))
+  
   for (i in 4:9)
   {
-    n <- unname(days_in_month(date(paste0(climateNA_outputs[["Year"]], "-0", i, "-01"))))
+    n <- ffvecapply(
+      unname(
+        days_in_month(
+          date(
+            paste0(climateNA_outputs[["Year"]][i1:i2], "-0", i, "-01")
+          )
+        )
+      ), 
+      X = climateNA_outputs[["Year"]], 
+      RETURN = TRUE,
+      VMODE = "integer"
+    )
     T_mx <- climateNA_outputs[[paste0("Tmax0", i)]] # Max monthly temperature
     r_m <- climateNA_outputs[[paste0("PPT0", i)]]   # Total monthly precip
-    E_m <- n * (.36 * T_mx + L_f(i))
-    RM_EFF <- .83 * r_m
-    Q_mr <- 3.937 * RM_EFF / (800 * exp(-MDC_0/400))
-    DC_HALF <- MDC_0 + .25 * E_m
-    DC_mr <- DC_HALF - 400 * log(1 + Q_mr)
-    MDC_m <- DC_mr + .25 * E_m
-    climateNA_outputs[[paste0("MDC0", i)]] <- MDC_0 <- (MDC_0 + MDC_m) / 2
+    E_m <- ffvecapply(n[i1:i2] * (.36 * T_mx[i1:i2] + L_f(i)), X = T_mx, RETURN = TRUE, VMODE = "double")
+    RM_EFF <- ffvecapply(.83 * r_m[i1:i2], X = r_m, RETURN = TRUE, VMODE = "double")
+    Q_mr <- ffvecapply(3.937 * RM_EFF[i1:i2] / (800 * exp(-MDC_0[i1, i2]/400)), X = T_mx, RETURN = TRUE, VMODE = "double")
+    DC_HALF <- ffvecapply(MDC_0[i1:i2] + .25 * E_m, X = T_mx, RETURN = TRUE, VMODE = "double")
+    DC_mr <- ffvecapply(DC_HALF[i1:i2] - 400 * log(1 + Q_mr[i1:i2]), X = T_mx, RETURN = TRUE, VMODE = "double")
+    MDC_m <- ffvecapply(DC_mr[i1:i2] + .25 * E_m[i1:i2], X = T_mx, RETURN = TRUE, VMODE = "double")
+    climateNA_outputs[[paste0("MDC0", i)]] <- MDC_0 <- 
+      ffvecapply((MDC_0[i1:i2] + MDC_m[i1:i2]) / 2, X = T_mx, RETURN = TRUE, VMODE = "double")
   }
   
   climateNA_outputs[
-    ,
     vars_select(
       colnames(climateNA_outputs), 
       Year, ID1, num_range("MDC", 4:9, 2)
@@ -222,11 +310,11 @@ calc_MDC <- function(climateNA_outputs)
   ]
 }
 
-MDC_250m <- calc_MDC(climateNA_outputs_250m)
-MDC_1km <- calc_MDC(climateNA_outputs_1km)
+MDC_250m <- Cache(calc_MDC, climateNA_outputs_250m)
+# MDC_1km <- Cache(calc_MDC, climateNA_outputs_1km)
 ```
 
-### Produce and save MDC rasters for the 2000-2010 period and the BCR6, 250m and 1km resolutions
+### Produce and save MDC rasters for the 2000-2010 period and the BCR6, 250m resolution
 ``` {R}
 save_MDC_RT <- function(res)
 {
@@ -253,5 +341,4 @@ save_MDC_RT <- function(res)
 }
 
 save_MDC_RT("250m")
-save_MDC_RT("1km")
 ```
