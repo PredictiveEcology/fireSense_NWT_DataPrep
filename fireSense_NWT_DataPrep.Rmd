@@ -91,12 +91,22 @@ setPaths(
 
 getPaths() # shows where the 4 relevant paths are
 
+modules <- list("fireSense_NWT_DataPrep")
+repo <- list("ygc2l/fireSense_NWT_DataPrep")
+
+# Download modules
+# invisible(
+#   mapply(
+#     modules,
+#     downloadModule,
+#     path = getPaths()$modulePath,
+#     repo = repo
+#   )
+# )
+
 times <- list(start = 2000, end = 2010)
 
-modules <- list("waterlandClassification", "fireSense_NWT_DataPrep")
-
 parameters <- list(
-  waterlandClassification = list(baseLayer = "LCC05"),
   fireSense_NWT_DataPrep = list(res = 10000)
 )
 
