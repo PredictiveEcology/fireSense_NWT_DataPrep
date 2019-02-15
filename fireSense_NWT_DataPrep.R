@@ -91,8 +91,6 @@ doEvent.fireSense_NWT_DataPrep = function(sim, eventTime, eventType)
     )
   )
   
-  sim <- scheduleEvent(sim, P(sim)$.runInitialTime, "fireSense_NWT_DataPrep", "run")
-  
   invisible(sim)
 }
 
@@ -102,45 +100,78 @@ doEvent.fireSense_NWT_DataPrep = function(sim, eventTime, eventType)
 ### template initialization
 Init <- function(sim) 
 {
+  
+  wetLCC <- Cache(
+    reproducible::prepInputs,
+    url = "https://drive.google.com/open?id=1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm",
+    targetFile = "wetlandsNWT250m.tif",
+    rasterToMatch = sim[["LCC05_BCR6_NWT"]],
+    maskWithRTM = TRUE,
+    filename2 = NULL
+  )
+  
+  # wetLCC code for Water 1
+  # wetLCC code for Wetlands 2
+  # wetLCC code for Uplands 3
+  
+  sim[["LCC05_BCR6_NWT"]][wetLCC == 1] <- 37 # LCC05 code for Water bodies
+  sim[["LCC05_BCR6_NWT"]][wetLCC == 2] <- 19 # LCC05 code for Wetlands
+
   #
   # Reclassify LCC05 at initialisation, so we don't have to do it every year
   #
+  mod[["reclass_code"]] <- b <- c(
+    CN_HD =	1,
+    CN_MD = 2,
+    CN_LD = 3,
+    CROPS = 4,
+    HWOOD = 5,
+    DISTB = 6,
+    MX_CN = 7,
+    MX_YG = 8,
+    MX_HW = 9,
+    NONVA = 10,
+    OP_CN = 11,
+    SHRUB = 12,
+    WTLND = 13
+  )
+  
   rcl <- matrix(
-      #    from,   to,   becomes
-    c(        -1,  0.01,      12, # After visual inspection, likely herbs/shrubs
-            0.99,  1.01,       1,
-            1.99,  2.01,       5,
-            2.99,  3.01,       7,
-            3.99,  4.01,       8,
-            4.99,  5.01,       9,
-            5.99, 10.01,       1,
-           10.99, 12.01,       5,
-           12.99, 13.01,       7,
-           13.99, 14.01,       9,
-           14.99, 15.01,       6,
-           15.99, 16.01,      12,
-           16.99, 17.01,      10,
-           17.99, 18.01,      12,
-           18.99, 19.01,      13, # Wetlands, waiting for Tati's update
-           19.99, 20.01,      11,
-           20.99, 24.01,      12,
-           24.99, 25.01,      10,
-           25.99, 29.01,       4,
-           29.99, 31.01,      10,
-           31.99, 32.01,      13, # Wetlands (here lichen-spruce bog), waiting for Tati's update
-           32.99, 33.01,       0, # do not burn
-           33.99, 35.01,       6,
-           35.99, 39.01,       0  # do not burn
+      #    from,   to,      becomes
+    c(        -1,  0.01, b[["SHRUB"]], # After visual inspection and discussion with GDT, likely herbs/shrubs
+            0.99,  1.01, b[["CN_HD"]],
+            1.99,  2.01, b[["HWOOD"]],
+            2.99,  3.01, b[["MX_CN"]],
+            3.99,  4.01, b[["MX_YG"]],
+            4.99,  5.01, b[["MX_HW"]],
+            5.99, 10.01, b[["CN_HD"]],
+           10.99, 12.01, b[["HWOOD"]],
+           12.99, 13.01, b[["MX_CN"]],
+           13.99, 14.01, b[["MX_HW"]],
+           14.99, 15.01, b[["DISTB"]],
+           15.99, 16.01, b[["SHRUB"]],
+           16.99, 17.01, b[["NONVA"]],
+           17.99, 18.01, b[["SHRUB"]],
+           18.99, 19.01, b[["WTLND"]], # LCC05 wetlands
+           19.99, 20.01, b[["OP_CN"]],
+           20.99, 24.01, b[["SHRUB"]],
+           24.99, 25.01, b[["NONVA"]],
+           25.99, 29.01, b[["CROPS"]],
+           29.99, 31.01, b[["NONVA"]],
+           31.99, 32.01, b[["WTLND"]], # Wetlands (here lichen-spruce bog)
+           32.99, 33.01,            0, # do not burn
+           33.99, 35.01, b[["DISTB"]],
+           35.99, 39.01,            0  # do not burn
     ),
     ncol = 3,
     byrow = TRUE
   )
   
   mod[["LCC05_BCR6_NWT_rcl"]] <- cloudCache(
+    cloudFolderID = sim[["cloudFolderID"]],
     reclassify, 
     x = sim[["LCC05_BCR6_NWT"]], 
-    rcl = rcl, 
-    cloudFolderID = sim[["cloudFolderID"]]
+    rcl = rcl
   )
   
   mod[["RTM"]] <- Cache(
@@ -156,8 +187,7 @@ Init <- function(sim)
 
 PrepThisYearMDC <- function(sim)
 {
-  
-  currentYear <- current(sim, "year")[["eventTime"]]
+  currentYear <- time(sim, "year")
   
   mod[["MDC"]] <- Cache(
     stack,
@@ -178,14 +208,15 @@ PrepThisYearMDC <- function(sim)
 
 PrepThisYearLCC <- function(sim)
 {
-  year <- current(sim, "year")[["eventTime"]]
+  year <- time(sim, "year")
   
   #
   # LCC05 with incremental disturbances
   #
   ## Calculate proportion of recently disturbed areas for each pixel of LCC05
   #
-  prop_disturbed <- Cache(
+  prop_disturbed <- cloudCache(
+    cloudFolderID = sim[["cloudFolderID"]],
     rasterize,
     x = SpatialPolygonsDataFrame(
       as(
@@ -204,14 +235,13 @@ PrepThisYearLCC <- function(sim)
   #
   ## Update LCC05
   #
-  mod[["LCC05_BCR6_NWT_rcl"]] <- Cache(
+  mod[["LCC05_BCR6_NWT_rcl"]] <- cloudCache(
+    cloudFolderID = sim[["cloudFolderID"]],
     `[<-`,
     x = mod[["LCC05_BCR6_NWT_rcl"]], 
     i = prop_disturbed[] >= .5, 
-    value = 6 # Code for disturbed areas
-  ) 
-  # DEBUG
-  writeRaster(mod[["LCC05_BCR6_NWT_rcl"]], filename = paste0("LCC05_BCR6_NWT_rcl", year, ".tif"), overwrite=TRUE)
+    value = mod[["reclass_code"]][["DISTB"]] # Code for disturbed areas
+  )
   
   n_lcc <- 13
   
@@ -243,7 +273,7 @@ PrepThisYearLCC <- function(sim)
 
 PrepThisYearFire <- function(sim)
 {
-  currentYear <- current(sim, "year")[["eventTime"]]
+  currentYear <- time(sim, "year")
   
   NFDB_PT_BCR6_NWT <- NFDB_PT_BCR6_NWT %>%
     # Filter fire data for the current year
@@ -271,7 +301,7 @@ PrepThisYearFire <- function(sim)
 
 Run <- function(sim) 
 {
-  sim <- PrepThisYearMDC(sim)
+  # sim <- PrepThisYearMDC(sim)
   sim <- PrepThisYearLCC(sim)
   sim <- PrepThisYearFire(sim)
 
@@ -295,7 +325,7 @@ Run <- function(sim)
   )
   
   if (!is.na(P(sim)$.runInterval)) # Assumes time only moves forward
-    sim <- scheduleEvent(sim, current(sim, "year")[["eventTime"]] + P(sim)$.runInterval, "fireSense_NWT_DataPrep", "run")
+    sim <- scheduleEvent(sim, time(sim) + P(sim)$.runInterval, "fireSense_NWT_DataPrep", "run")
   
   invisible(sim)
 }
