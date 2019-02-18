@@ -82,11 +82,17 @@ setwd("H:/Jean")
 library(SpaDES)
 
 
+# setPaths(
+#   cachePath = "H:/Jean/cache",
+#   inputPath = "H:/Jean/inputs",
+#   outputPath = "H:/Jean/outputs",
+#   modulePath = "\\\\tsclient\\C/Users/jemar270/Documents/GitHub"
+# )
+
 setPaths(
-  cachePath = "H:/Jean/cache",
-  inputPath = "H:/Jean/inputs",
-  outputPath = "H:/Jean/outputs",
-  modulePath = "\\\\tsclient\\C/Users/jemar270/Documents/GitHub"
+  cachePath = file.path("~/project", Sys.getenv("USER"), "cache"),
+  inputPath = file.path("~/project", Sys.getenv("USER"), "inputs"),
+  modulePath = file.path("~/project", Sys.getenv("USER"))
 )
 
 getPaths() # shows where the 4 relevant paths are
@@ -104,7 +110,7 @@ repo <- list("ygc2l/fireSense_NWT_DataPrep")
 #   )
 # )
 
-times <- list(start = 2000, end = 2010)
+times <- list(start = 1995, end = 2015)
 
 parameters <- list(
   fireSense_NWT_DataPrep = list(res = 10000)
@@ -112,9 +118,12 @@ parameters <- list(
 
 cloudFolderID <- "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkEHDc0"
 
-# MDC_BCR6_NWT_250m <- raster::raster(nrow = 10, ncol = 10, res = 250, vals = 1)
-tmpl <- raster::raster("MDC.tif")
-MDC_BCR6_NWT_250m <- raster::stack(lapply(1:6, function(i)tmpl))
+inputs <- data.frame(
+   files = dir(getPaths()$inputPath, pattern = "MDCs_.*_BCR6_NWT_250m[.]tif$"),
+   functions = "raster::stack",
+   objectName = "MDC_BCR6_NWT_250m",
+   loadTime = 1995:2015
+)
 
 LCC05_BCR6_NWT <- Cache(
   prepInputs, 
@@ -135,13 +144,13 @@ NFDB_PT_BCR6_NWT <- Cache(
 
 objects <- list(
   cloudFolderID = cloudFolderID,
-  MDC_BCR6_NWT_250m = MDC_BCR6_NWT_250m,
   LCC05_BCR6_NWT = LCC05_BCR6_NWT,
   NFDB_PO_BCR6_NWT = NFDB_PO_BCR6_NWT,
   NFDB_PT_BCR6_NWT = NFDB_PT_BCR6_NWT
 )
 
 mySim <- simInit(
+  inputs = inputs,
   times = times, 
   params = parameters, 
   modules = modules,
