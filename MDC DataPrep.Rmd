@@ -313,7 +313,7 @@ MDC_250m <- Cache(calc_MDC, climateNA_outputs_250m)
 # MDC_1km <- Cache(calc_MDC, climateNA_outputs_1km)
 ```
 
-### Produce and save MDC rasters for the 2000-2010 period, BCR6 and BCR6 as contained in the NWT, 250m resolution
+### Produce and save MDC rasters for the 1995-2015 period, BCR6 and BCR6 as contained in the NWT, 250m resolution
 ``` {R}
 save_MDC_RT <- function(res)
 {
@@ -324,14 +324,14 @@ save_MDC_RT <- function(res)
   {
     lapply(
       4:9,
-      function(month)
+      function(month_i)
       {
         BCR6[MDC[MDC[["Year"]] == year, "ID1"][]] <-
-               MDC[MDC[["Year"]] == year, paste0("MDC0", month)][]
+               MDC[MDC[["Year"]] == year, paste0("MDC0", month_i)][]
         print(
           writeRaster(
             BCR6, 
-            filename = paste0("MDC0", month, "_", year, "_BCR6_", res, ".tif"),
+            filename = paste0("MDC0", month_i, "_", year, "_BCR6_", res, ".tif"),
             overwrite = TRUE,
             datatype = "FLT4S"
           )
@@ -342,7 +342,7 @@ save_MDC_RT <- function(res)
           BCR6,
           rasterToMatch = BCR6_NWT_RT,
           maskWithRTM = TRUE,
-          filename2 = paste0("MDC0", month, "_", year, "_BCR6_NWT_", res, ".tif"),
+          filename2 = paste0("MDC0", month_i, "_", year, "_BCR6_NWT_", res, ".tif"),
           datatype = "FLT4S",
           method = "bilinear",
           overwrite = TRUE
@@ -353,4 +353,30 @@ save_MDC_RT <- function(res)
 }
 
 save_MDC_RT("250m")
+```
+
+### For each year stack the rasters of each month (April to September), 250m resolution
+```{R}
+inputDir <- "../inputs"
+
+if(!dir.exists(inputDir))
+{
+  dir.create(inputDir)
+}
+
+for (year in 1995:2015)
+{
+  writeRaster(
+    stack(
+      lapply(
+        dir(pattern = paste0("MDC0[4-9]_", year, "_BCR6_NWT_250m[.]tif$")),
+        raster
+      )
+    ),
+    datatype = "FLT4S",
+    filename = file.path(inputDir, paste0("MDCs_", year, "_BCR6_NWT_250m.tif")),
+    overwrite = TRUE
+  )
+}
+
 ```
