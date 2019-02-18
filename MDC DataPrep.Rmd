@@ -12,7 +12,6 @@ The purpose of this file is to document how we produced annual Monthly Drought C
 library(dplyr)
 library(ff)
 library(ffbase)
-library(lubridate)
 library(raster)
 library(reproducible)
 library(sf)
@@ -314,14 +313,14 @@ MDC_250m <- Cache(calc_MDC, climateNA_outputs_250m)
 # MDC_1km <- Cache(calc_MDC, climateNA_outputs_1km)
 ```
 
-### Produce and save MDC rasters for the 2000-2010 period and the BCR6, 250m resolution
+### Produce and save MDC rasters for the 2000-2010 period, BCR6 and BCR6 as contained in the NWT, 250m resolution
 ``` {R}
 save_MDC_RT <- function(res)
 {
   BCR6 <- get(paste0("BCR6_", res))
   MDC <- get(paste0("MDC_", res))
   
-  for (year in 2000:2010)
+  for (year in 1995:2015)
   {
     lapply(
       4:9,
@@ -333,8 +332,20 @@ save_MDC_RT <- function(res)
           writeRaster(
             BCR6, 
             filename = paste0("MDC0", month, "_", year, "_BCR6_", res, ".tif"),
-            overwrite = TRUE
+            overwrite = TRUE,
+            datatype = "FLT4S"
           )
+        )
+        
+        Cache(
+          postProcess,
+          BCR6,
+          rasterToMatch = BCR6_NWT_RT,
+          maskWithRTM = TRUE,
+          filename2 = paste0("MDC0", month, "_", year, "_BCR6_NWT_", res, ".tif"),
+          datatype = "FLT4S",
+          method = "bilinear",
+          overwrite = TRUE
         )
       }
     )
