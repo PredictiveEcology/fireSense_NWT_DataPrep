@@ -40,16 +40,22 @@ defineModule(sim, list(
       desc = "GDrive folder ID for cloud caching."
     ),
     expectsInput(
+      objectName = "LCC05_BCR6_NWT",
+      objectClass = "matrix",
+      sourceURL = "https://drive.google.com/open?id=1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN",
+      desc = "Land Cover Map of Canada 2005 (LCC05) within BCR6 as contained in the Northwest Territories."
+    ),
+    expectsInput(
+      objectName = "LCC05_reclass_mx",
+      objectClass = "RasterLayer",
+      sourceURL = NA_character_,
+      desc = "Reclassification matrix used to reclassify LCC05 classes to the classes defined in the LCC05_reclass_mx matrix."
+    ),
+    expectsInput(
       objectName = "MDC_BCR6_NWT_250m",
       objectClass = "RasterStack",
       sourceURL = NA_character_,
       desc = "Monthly Drought Code (April to September) within BCR6 as contained in the Northwest Territories."
-    ),
-    expectsInput(
-      objectName = "LCC05_BCR6_NWT",
-      objectClass = "RasterLayer",
-      sourceURL = "https://drive.google.com/open?id=1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN",
-      desc = "Land Cover Map of Canada 2005 (LCC05) within BCR6 as contained in the Northwest Territories."
     ),
     expectsInput(
       objectName = "NFDB_PO_BCR6_NWT",
@@ -72,7 +78,7 @@ defineModule(sim, list(
       desc = "Contains MDC, land-cover, fire data necessary to train fireSense_FireFrequency for BCR6 as contained in the Northwest Territories."
     )
   )
-))
+    ))
 
 ## event types
 #   - type `init` is required for initialization
@@ -100,7 +106,6 @@ doEvent.fireSense_NWT_DataPrep = function(sim, eventTime, eventType)
 ### template initialization
 Init <- function(sim) 
 {
-  
   wetLCC <- Cache(
     reproducible::prepInputs,
     url = "https://drive.google.com/open?id=1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm",
@@ -114,81 +119,31 @@ Init <- function(sim)
   # wetLCC code for Wetlands 2
   # wetLCC code for Uplands 3
   
-  sim[["LCC05_BCR6_NWT"]][wetLCC == 1] <- 37 # LCC05 code for Water bodies
-  sim[["LCC05_BCR6_NWT"]][wetLCC == 2] <- 19 # LCC05 code for Wetlands
-
-  #
-  # Reclassify LCC05 at initialisation, so we don't have to do it every year
-  #
-  mod[["reclass_code"]] <- b <- c(
-    CN_HD =	1,
-    CN_MD = 2,
-    CN_LD = 3,
-    CROPS = 4,
-    HWOOD = 5,
-    DISTB = 6,
-    MX_CN = 7,
-    MX_YG = 8,
-    MX_HW = 9,
-    NONVA = 10,
-    OP_CN = 11,
-    SHRUB = 12,
-    WTLND = 13
-  )
-  
-  rcl <- matrix(
-      #    from,   to,      becomes
-    c(        -1,  0.01, b[["SHRUB"]], # After visual inspection and discussion with GDT, likely herbs/shrubs
-            0.99,  1.01, b[["CN_HD"]],
-            1.99,  2.01, b[["HWOOD"]],
-            2.99,  3.01, b[["MX_CN"]],
-            3.99,  4.01, b[["MX_YG"]],
-            4.99,  5.01, b[["MX_HW"]],
-            5.99, 10.01, b[["CN_HD"]],
-           10.99, 12.01, b[["HWOOD"]],
-           12.99, 13.01, b[["MX_CN"]],
-           13.99, 14.01, b[["MX_HW"]],
-           14.99, 15.01, b[["DISTB"]],
-           15.99, 16.01, b[["SHRUB"]],
-           16.99, 17.01, b[["NONVA"]],
-           17.99, 18.01, b[["SHRUB"]],
-           18.99, 19.01, b[["WTLND"]], # LCC05 wetlands
-           19.99, 20.01, b[["OP_CN"]],
-           20.99, 24.01, b[["SHRUB"]],
-           24.99, 25.01, b[["NONVA"]],
-           25.99, 29.01, b[["CROPS"]],
-           29.99, 31.01, b[["NONVA"]],
-           31.99, 32.01, b[["WTLND"]], # Wetlands (here lichen-spruce bog)
-           32.99, 33.01,            0, # do not burn
-           33.99, 35.01, b[["DISTB"]],
-           35.99, 39.01,            0  # do not burn
-    ),
-    ncol = 3,
-    byrow = TRUE
-  )
-  
-  mod[["LCC05_BCR6_NWT_rcl"]] <- cloudCache(
-    cloudFolderID = sim[["cloudFolderID"]],
-    reclassify, 
-    x = sim[["LCC05_BCR6_NWT"]], 
-    rcl = rcl
-  )
+  mod[["LCC05_BCR6_NWT"]] <- sim[["LCC05_BCR6_NWT"]]
+  mod[["LCC05_BCR6_NWT"]][wetLCC == 1] <- 37 # LCC05 code for Water bodies
+  mod[["LCC05_BCR6_NWT"]][wetLCC == 2] <- 19 # LCC05 code for Wetlands
   
   mod[["RTM"]] <- Cache(
     aggregate,
-    mod[["LCC05_BCR6_NWT_rcl"]],
-    fact = P(sim)$res / xres(mod[["LCC05_BCR6_NWT_rcl"]]),
+    sim[["LCC05_BCR6_NWT"]],
+    fact = P(sim)$res / xres(sim[["LCC05_BCR6_NWT"]]),
     fun = function(x, ...) if (anyNA(x)) NA else 1
+  )
+  
+  mod[["PX_ID"]] <- tibble(PX_ID = which(!is.na(mod[["RTM"]][])))
+  
+  mod[["RTM_VT"]] <- bind_cols(
+    st_as_sf(rasterToPolygons(mod[["RTM"]])),
+    mod[["PX_ID"]]
   )
   
   sim <- scheduleEvent(sim, eventTime = P(sim)$.runInitialTime, "fireSense_NWT_DataPrep", "run")
   invisible(sim)
 }
 
+
 PrepThisYearMDC <- function(sim)
 {
-  currentYear <- time(sim, "year")
-  
   mod[["MDC"]] <- Cache(
     stack,
     lapply(
@@ -197,10 +152,9 @@ PrepThisYearMDC <- function(sim)
       rasterToMatch = mod$RTM,
       maskWithRTM = TRUE,
       method = "bilinear",
-      useCache = FALSE,
-      filename2 = paste0("MDC_BCR6_NWT_250m", currentYear, ".tif"),
-      overwrite = TRUE
-    )
+      filename2 = NULL
+    ),
+    useCache = "overwrite"
   )
   
   invisible(sim)
@@ -209,43 +163,49 @@ PrepThisYearMDC <- function(sim)
 PrepThisYearLCC <- function(sim)
 {
   year <- time(sim, "year")
-  
+
   #
   # LCC05 with incremental disturbances
   #
-  ## Calculate proportion of recently disturbed areas for each pixel of LCC05
-  #
-  prop_disturbed <- cloudCache(
-    cloudFolderID = sim[["cloudFolderID"]],
-    rasterize,
-    x = SpatialPolygonsDataFrame(
-      as(
-        st_union(
-          filter(sim[["NFDB_PO_BCR6_NWT"]], YEAR > (year - 15) & YEAR <= year)
-        ),
-        "Spatial"
-      ), 
-      data = data.frame(ID = 1),
-      match.ID = FALSE
-    ),
-    y = mod[["LCC05_BCR6_NWT_rcl"]], 
-    getCover = TRUE
-  )
-
-  #
-  ## Update LCC05
-  #
-  mod[["LCC05_BCR6_NWT_rcl"]] <- cloudCache(
-    cloudFolderID = sim[["cloudFolderID"]],
+  LCC05 <- Cache(
+    # cloudFolderID = sim[["cloudFolderID"]],
     `[<-`,
-    x = mod[["LCC05_BCR6_NWT_rcl"]], 
-    i = prop_disturbed[] >= .5, 
-    value = mod[["reclass_code"]][["DISTB"]] # Code for disturbed areas
+    x = mod[["LCC05_BCR6_NWT"]],
+    i = {
+      # Calculate proportion of recently disturbed areas for each pixel of LCC05
+      Cache(
+        # cloudFolderID = sim[["cloudFolderID"]],
+        rasterize,
+        x = SpatialPolygonsDataFrame(
+          as(
+            st_union(
+              filter(sim[["NFDB_PO_BCR6_NWT"]], YEAR > (year - 15) & YEAR <= year)
+            ),
+            "Spatial"
+          ), 
+          data = data.frame(ID = 1),
+          match.ID = FALSE
+        ),
+        y = mod[["LCC05_BCR6_NWT"]],
+        getCover = TRUE
+      )[] >= .5
+    }, 
+    value = 34 # LCC05 code for recent burns
   )
   
-  n_lcc <- 13
   
-  mod$pp_lcc <- 
+  # Reclassify LCC05 to our classes
+  mod[["LCC05_BCR6_NWT_rcl"]] <- Cache(
+    # cloudFolderID = sim[["cloudFolderID"]],
+    reclassify,
+    x = LCC05,
+    rcl = sim[["LCC05_reclass_mx"]]
+  )
+  
+  
+  n_lcc <- max(sim[["LCC05_reclass_mx"]][,3])
+  
+  mod$pp_lcc <-
     lapply(
       1:n_lcc,
       function(cl_i)
@@ -253,15 +213,16 @@ PrepThisYearLCC <- function(sim)
         calc_prop_lcc <- function(x, cl = cl_i, na.rm = TRUE)
         {
           if (anyNA(x)) return(NA)
-          sum(x == cl, na.rm = na.rm) / (P(sim)$res ** 2)
+          sum(x == cl, na.rm = na.rm) / (agg_fact ** 2)
         }
         
         col_name <- paste0("cl", cl_i)
+        agg_fact <- P(sim)$res / xres(mod[["LCC05_BCR6_NWT_rcl"]])
         
-        tibble( 
+        tibble(
           !!col_name := aggregate(
-            mod[["LCC05_BCR6_NWT_rcl"]], 
-            fact = P(sim)$res / xres(mod[["LCC05_BCR6_NWT_rcl"]]), 
+            mod[["LCC05_BCR6_NWT_rcl"]],
+            fact = agg_fact,
             fun = calc_prop_lcc
           )[]
         )
@@ -285,12 +246,12 @@ PrepThisYearFire <- function(sim)
     # Keep only lightning fires
     dplyr::filter(CAUSE == "L")
   
-  RTM_VT <- st_as_sf(rasterToPolygons(mod[["RTM"]]))
-  RTM_VT[["PX_ID"]] <- which(!is.na(mod[["RTM"]][]))
-  
   mod[["fires"]] <- st_set_geometry(
     mutate(
-      st_join(RTM_VT, NFDB_PT_BCR6_NWT),
+      filter(
+        st_join(mod[["RTM_VT"]], NFDB_PT_BCR6_NWT),
+        !is.na(YEAR)
+      ),
       YEAR = currentYear
     ), 
     NULL
@@ -301,30 +262,35 @@ PrepThisYearFire <- function(sim)
 
 Run <- function(sim) 
 {
-  # sim <- PrepThisYearMDC(sim)
+  sim <- PrepThisYearMDC(sim)
   sim <- PrepThisYearLCC(sim)
   sim <- PrepThisYearFire(sim)
-
-  px_id <- distinct(mod[["fires"]], PX_ID)[["PX_ID"]]
-  
-  # Prepare input data for the fireSense_FireFrequency module
-  sim[["dataFireSense_FireFrequency"]] <- bind_cols(
-    mod[["fires"]] %>%
-      group_by(PX_ID, YEAR) %>%
-      summarise(N_FIRES = n()),
-    rename(
-      as_tibble(mod[["MDC"]][px_id]),
-      MDC04 = 1,
-      MDC05 = 2,
-      MDC06 = 3,
-      MDC07 = 4,
-      MDC08 = 5,
-      MDC09 = 6
-    ),
-    mod[["pp_lcc"]]
+ 
+  # Prepare input data for the fireSense_FrequencyFit module
+  sim[["dataFireSense_FrequencyFit"]] <- bind_rows(
+    sim[["dataFireSense_FrequencyFit"]],
+    bind_cols(
+      mod[["fires"]] %>%
+        group_by(PX_ID, YEAR) %>%
+        summarise(N_FIRES = n()) %>%
+        right_join(mod[["PX_ID"]], by = "PX_ID") %>%
+        mutate(YEAR = time(sim, "year"), N_FIRES = ifelse(is.na(N_FIRES), 0, N_FIRES)),
+      rename(
+        as_tibble(mod[["MDC"]][mod[["PX_ID"]][["PX_ID"]]]),
+        MDC04 = 1,
+        MDC05 = 2,
+        MDC06 = 3,
+        MDC07 = 4,
+        MDC08 = 5,
+        MDC09 = 6
+      ),
+      mod[["pp_lcc"]]
+    )
   )
   
-  if (!is.na(P(sim)$.runInterval)) # Assumes time only moves forward
+  saveRDS(sim[["dataFireSense_FrequencyFit"]], file = paste0("dataFireSense_FrequencyFit.rds"))
+  
+  if (!is.na(P(sim)$.runInterval))
     sim <- scheduleEvent(sim, time(sim) + P(sim)$.runInterval, "fireSense_NWT_DataPrep", "run")
   
   invisible(sim)
@@ -344,13 +310,13 @@ Run <- function(sim)
   # if (!suppliedElsewhere('defaultColor', sim)) {
   #   sim$map <- Cache(prepInputs, extractURL('map')) # download, extract, load file from url in sourceURL
   # }
-
+  
   cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
-
+  
   # ! ----- EDIT BELOW ----- ! #
-
+  
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
 }
