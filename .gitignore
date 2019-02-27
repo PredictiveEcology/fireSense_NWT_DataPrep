@@ -44,3 +44,4 @@ rsconnect/
 *.tfw
 *.sbx
 *.xml
+.Rproj.user
