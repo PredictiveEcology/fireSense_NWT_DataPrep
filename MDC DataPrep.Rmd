@@ -21,6 +21,15 @@ library(tidyselect)
 
 options(reproducible.overwrite = TRUE)
 knitr::opts_chunk$set(eval = FALSE)
+
+climateNA_Outputs_FD <- "F:/NWT/Climate/" # Folder where climateNA_outputs are stored
+
+SpaDES_Input_Dir <- "../inputs"
+
+if(!dir.exists(SpaDES_Input_Dir))
+{
+  dir.create(SpaDES_Input_Dir)
+}
 ```
 
 # Prepare ClimateNA inputs - 250m and 1km resolution
@@ -206,8 +215,6 @@ read_ClimateNA_outputs <- function(files)
   climateNA_outputs
 }
 
-climateNA_Outputs_FD <- "F:/NWT/Climate/" # Folder where climateNA_outputs are stored
-
 climateNA_outputs_250m <- read_ClimateNA_outputs(
   dir(
     path = climateNA_Outputs_FD, 
@@ -357,13 +364,6 @@ save_MDC_RT("250m")
 
 ### For each year stack the rasters of each month (April to September), 250m resolution
 ```{R}
-inputDir <- "../inputs"
-
-if(!dir.exists(inputDir))
-{
-  dir.create(inputDir)
-}
-
 for (year in 1995:2015)
 {
   writeRaster(
@@ -374,9 +374,8 @@ for (year in 1995:2015)
       )
     ),
     datatype = "FLT4S",
-    filename = file.path(inputDir, paste0("MDCs_", year, "_BCR6_NWT_250m.tif")),
+    filename = file.path(SpaDES_Input_Dir, paste0("MDCs_", year, "_BCR6_NWT_250m.tif")),
     overwrite = TRUE
   )
 }
-
 ```
