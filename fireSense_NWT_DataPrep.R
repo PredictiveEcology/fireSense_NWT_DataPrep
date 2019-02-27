@@ -78,7 +78,7 @@ defineModule(sim, list(
       desc = "Contains MDC, land-cover, fire data necessary to train fireSense_FireFrequency for BCR6 as contained in the Northwest Territories."
     )
   )
-    ))
+))
 
 ## event types
 #   - type `init` is required for initialization
