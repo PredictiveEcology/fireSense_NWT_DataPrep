@@ -203,7 +203,8 @@ PrepThisYearLCC <- function(sim)
   )
   
   
-  n_lcc <- max(sim[["LCC05_reclass_mx"]][,3])
+  # n_lcc <- max(sim[["LCC05_reclass_mx"]][,3])
+  n_lcc <- 39
   
   mod$pp_lcc <-
     lapply(

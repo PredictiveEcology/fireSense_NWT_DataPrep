@@ -77,11 +77,9 @@ which are reclassified by this module as:
 # Usage
 
 ```{r module_usage}
-setwd("H:/Jean")
-
 library(SpaDES)
 
-
+# setwd("H:/Jean")
 # setPaths(
 #   cachePath = "H:/Jean/cache",
 #   inputPath = "H:/Jean/inputs",
@@ -89,10 +87,15 @@ library(SpaDES)
 #   modulePath = "\\\\tsclient\\C/Users/jemar270/Documents/GitHub"
 # )
 
+# setPaths(
+#   cachePath = file.path("~/project", Sys.getenv("USER"), "cache"),
+#   inputPath = file.path("~/project", Sys.getenv("USER"), "inputs"),
+#   modulePath = file.path("~/project", Sys.getenv("USER"))
+# )
+
 setPaths(
-  cachePath = file.path("~/project", Sys.getenv("USER"), "cache"),
-  inputPath = file.path("~/project", Sys.getenv("USER"), "inputs"),
-  modulePath = file.path("~/project", Sys.getenv("USER"))
+  inputPath = "../inputs",
+  modulePath = ".."
 )
 
 getPaths() # shows where the 4 relevant paths are
@@ -110,7 +113,9 @@ repo <- list("ygc2l/fireSense_NWT_DataPrep")
 #   )
 # )
 
-times <- list(start = 1995, end = 2015)
+start_year <- 1995
+end_year <- 2015
+times <- list(start = start_year, end = end_year)
 
 parameters <- list(
   fireSense_NWT_DataPrep = list(res = 10000)
@@ -122,7 +127,7 @@ inputs <- data.frame(
    files = dir(getPaths()$inputPath, pattern = "MDCs_.*_BCR6_NWT_250m[.]tif$"),
    functions = "raster::stack",
    objectName = "MDC_BCR6_NWT_250m",
-   loadTime = 1995:2015
+   loadTime = start_year:end_year
 )
 
 LCC05_BCR6_NWT <- Cache(
