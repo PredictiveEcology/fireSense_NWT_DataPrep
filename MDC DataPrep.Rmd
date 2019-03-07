@@ -182,36 +182,13 @@ read_ClimateNA_outputs <- function(files)
     )
   )
   
+  # Re-encode NoData, they were encoded as -9999
   for (i in 4:9)
   {
     climateNA_outputs[[paste0("Tmax0", i)]][climateNA_outputs[[paste0("Tmax0", i)]][] == -9999] <- NA
     climateNA_outputs[[paste0("PPT0", i)]][climateNA_outputs[[paste0("PPT0", i)]][] == -9999] <- NA
   }
-  
-  # 
-  # 
-  # climateNA_outputs[
-  #   vars_select(
-  #     colnames(climateNA_outputs),
-  #     num_range("Tmax", 4:9, 2), num_range("PPT",  4:9, 2)
-  #   )
-  # ] <- do.call(
-  #   "cbind",
-  #   lapply(
-  #     climateNA_outputs[
-  #       vars_select(
-  #         colnames(climateNA_outputs),
-  #         num_range("Tmax", 4:9, 2), num_range("PPT",  4:9, 2)
-  #       )
-  #     ],
-  #     function(x)
-  #     {
-  #       x[x[] == -9999] <- NA # NoData are encoded as -9999
-  #       x
-  #     }
-  #   )
-  # )
-  
+
   climateNA_outputs
 }
 
