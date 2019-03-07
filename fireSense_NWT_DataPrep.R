@@ -46,12 +46,6 @@ defineModule(sim, list(
       desc = "Land Cover Map of Canada 2005 (LCC05) within BCR6 as contained in the Northwest Territories."
     ),
     expectsInput(
-      objectName = "LCC05_reclass_mx",
-      objectClass = "RasterLayer",
-      sourceURL = NA_character_,
-      desc = "Reclassification matrix used to reclassify LCC05 classes to the classes defined in the LCC05_reclass_mx matrix."
-    ),
-    expectsInput(
       objectName = "MDC_BCR6_NWT_250m",
       objectClass = "RasterStack",
       sourceURL = NA_character_,
@@ -73,9 +67,14 @@ defineModule(sim, list(
   outputObjects = bind_rows(
     #createsOutput("objectName", "objectClass", "output object description", ...),
     createsOutput(
-      objectName = "dataFireSense_FireFrequency", 
+      objectName = "dataFireSense_EscapeFit", 
       objectClass = "data.frame", 
-      desc = "Contains MDC, land-cover, fire data necessary to train fireSense_FireFrequency for BCR6 as contained in the Northwest Territories."
+      desc = "Contains MDC, land-cover, fire data necessary to train the fireSense_EscapeFit SpaDES module for BCR6 as contained in the Northwest Territories."
+    ),
+    createsOutput(
+      objectName = "dataFireSense_FrequencyFit", 
+      objectClass = "data.frame", 
+      desc = "Contains MDC, land-cover, fire data necessary to train the fireSense_FrequencyFit SpaDES module for BCR6 as contained in the Northwest Territories."
     )
   )
 ))
@@ -115,7 +114,7 @@ Init <- function(sim)
     maskWithRTM = TRUE,
     filename2 = NULL
   )
-  
+ 
   # wetLCC code for Water 1
   # wetLCC code for Wetlands 2
   # wetLCC code for Uplands 3
@@ -154,9 +153,9 @@ PrepThisYearMDC <- function(sim)
       destinationPath = dataPath(sim),
       maskWithRTM = TRUE,
       method = "bilinear",
+      datatype = "FLT4S",
       filename2 = NULL
-    ),
-    useCache = "overwrite"
+    )
   )
   
   invisible(sim)
@@ -184,28 +183,19 @@ PrepThisYearLCC <- function(sim)
               filter(sim[["NFDB_PO_BCR6_NWT"]], YEAR > (year - 15) & YEAR <= year)
             ),
             "Spatial"
-          ), 
+          ),
           data = data.frame(ID = 1),
           match.ID = FALSE
         ),
         y = mod[["LCC05_BCR6_NWT"]],
         getCover = TRUE
       )[] >= .5
-    }, 
+    },
     value = 34 # LCC05 code for recent burns
   )
   
+  mod[["LCC05_BCR6_NWT"]] <- raster(paste0("LCC05_incr_dist_", time(sim, "year"), ".tif"))
   
-  # Reclassify LCC05 to our classes
-  mod[["LCC05_BCR6_NWT_rcl"]] <- Cache(
-    # cloudFolderID = sim[["cloudFolderID"]],
-    reclassify,
-    x = LCC05,
-    rcl = sim[["LCC05_reclass_mx"]]
-  )
-  
-  
-  # n_lcc <- max(sim[["LCC05_reclass_mx"]][,3])
   n_lcc <- 39
   
   mod$pp_lcc <-
@@ -220,11 +210,11 @@ PrepThisYearLCC <- function(sim)
         }
         
         col_name <- paste0("cl", cl_i)
-        agg_fact <- P(sim)$res / xres(mod[["LCC05_BCR6_NWT_rcl"]])
+        agg_fact <- P(sim)$res / xres(mod[["LCC05_BCR6_NWT"]])
         
         tibble(
           !!col_name := aggregate(
-            mod[["LCC05_BCR6_NWT_rcl"]],
+            mod[["LCC05_BCR6_NWT"]],
             fact = agg_fact,
             fun = calc_prop_lcc
           )[]
@@ -268,16 +258,17 @@ Run <- function(sim)
   sim <- PrepThisYearMDC(sim)
   sim <- PrepThisYearLCC(sim)
   sim <- PrepThisYearFire(sim)
- 
+  
   # Prepare input data for the fireSense_FrequencyFit module
   sim[["dataFireSense_FrequencyFit"]] <- bind_rows(
     sim[["dataFireSense_FrequencyFit"]],
     bind_cols(
       mod[["fires"]] %>%
         group_by(PX_ID, YEAR) %>%
-        summarise(N_FIRES = n()) %>%
+        summarise(n_fires = n()) %>%
+        ungroup %>%
         right_join(mod[["PX_ID"]], by = "PX_ID") %>%
-        mutate(YEAR = time(sim, "year"), N_FIRES = ifelse(is.na(N_FIRES), 0, N_FIRES)),
+        mutate(YEAR = time(sim, "year"), n_fires = ifelse(is.na(n_fires), 0, n_fires)),
       rename(
         as_tibble(mod[["MDC"]][mod[["PX_ID"]][["PX_ID"]]]),
         MDC04 = 1,
@@ -291,7 +282,28 @@ Run <- function(sim)
     )
   )
   
-  saveRDS(sim[["dataFireSense_FrequencyFit"]], file = paste0("dataFireSense_FrequencyFit.rds"))
+  fire_escape_data <- mod[["fires"]] %>%
+    group_by(PX_ID, YEAR) %>%
+    summarise(n_fires = n(), escaped = sum(SIZE_HA > 1)) %>%
+    ungroup
+  
+  # Prepare input data for the fireSense_EscapeFit module
+  sim[["dataFireSense_EscapeFit"]] <- bind_rows(
+    sim[["dataFireSense_EscapeFit"]],
+    bind_cols(
+      fire_escape_data,
+      rename(
+        as_tibble(mod[["MDC"]][fire_escape_data[["PX_ID"]]]),
+        MDC04 = 1,
+        MDC05 = 2,
+        MDC06 = 3,
+        MDC07 = 4,
+        MDC08 = 5,
+        MDC09 = 6
+      ),
+      filter(mod[["pp_lcc"]], mod[["PX_ID"]][["PX_ID"]] %in% fire_escape_data[["PX_ID"]])
+    )
+  )
   
   if (!is.na(P(sim)$.runInterval))
     sim <- scheduleEvent(sim, time(sim) + P(sim)$.runInterval, "fireSense_NWT_DataPrep", "run")
