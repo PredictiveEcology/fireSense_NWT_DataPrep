@@ -86,9 +86,6 @@ setPaths(
 
 getPaths() # shows where the 4 relevant paths are
 
-modules <- list("fireSense_NWT_DataPrep")
-repo <- list("ygc2l/fireSense_NWT_DataPrep")
-
 start_year <- 1995
 end_year <- 2015
 times <- list(start = start_year, end = end_year)

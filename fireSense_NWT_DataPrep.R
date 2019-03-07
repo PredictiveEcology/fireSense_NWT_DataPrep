@@ -259,7 +259,9 @@ Run <- function(sim)
   sim <- PrepThisYearLCC(sim)
   sim <- PrepThisYearFire(sim)
   
+  #
   # Prepare input data for the fireSense_FrequencyFit module
+  #
   sim[["dataFireSense_FrequencyFit"]] <- bind_rows(
     sim[["dataFireSense_FrequencyFit"]],
     bind_cols(
@@ -277,17 +279,37 @@ Run <- function(sim)
         MDC07 = 4,
         MDC08 = 5,
         MDC09 = 6
-      ),
+      ) %>% dplyr::select(MDC06),
       mod[["pp_lcc"]]
     )
   )
   
+  #
+  ## Filter out pixels where at least one variable evaluates to 0
+  #
+  ### Filter out pixels where none of the classes of interest are present
+  #
+  sim[["dataFireSense_FrequencyFit"]] %<>%
+    dplyr::filter(
+      (
+        dplyr::select(., paste0("cl", c(1:32, 34:35))) %>% # 33, 36:39 do not burn. No need to estimate coefficients, it's 0.
+          rowSums()
+      ) != 0
+    )
+  
+  #
+  ### Filter out pixels where MDC06 is > 0
+  #
+  sim[["dataFireSense_FrequencyFit"]] %<>% dplyr::filter(MDC06 > 0)
+  
+  #
+  # Prepare input data for the fireSense_EscapeFit module
+  #  
   fire_escape_data <- mod[["fires"]] %>%
     group_by(PX_ID, YEAR) %>%
     summarise(n_fires = n(), escaped = sum(SIZE_HA > 1)) %>%
     ungroup
-  
-  # Prepare input data for the fireSense_EscapeFit module
+
   sim[["dataFireSense_EscapeFit"]] <- bind_rows(
     sim[["dataFireSense_EscapeFit"]],
     bind_cols(
@@ -300,8 +322,8 @@ Run <- function(sim)
         MDC07 = 4,
         MDC08 = 5,
         MDC09 = 6
-      ),
-      filter(mod[["pp_lcc"]], mod[["PX_ID"]][["PX_ID"]] %in% fire_escape_data[["PX_ID"]])
+      ) %>% dplyr::select(MDC06),
+      dplyr::filter(mod[["pp_lcc"]], mod[["PX_ID"]][["PX_ID"]] %in% fire_escape_data[["PX_ID"]])
     )
   )
   
