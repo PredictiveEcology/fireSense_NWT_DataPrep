@@ -79,20 +79,6 @@ which are reclassified by this module as:
 ```{r module_usage}
 library(SpaDES)
 
-# setwd("H:/Jean")
-# setPaths(
-#   cachePath = "H:/Jean/cache",
-#   inputPath = "H:/Jean/inputs",
-#   outputPath = "H:/Jean/outputs",
-#   modulePath = "\\\\tsclient\\C/Users/jemar270/Documents/GitHub"
-# )
-
-# setPaths(
-#   cachePath = file.path("~/project", Sys.getenv("USER"), "cache"),
-#   inputPath = file.path("~/project", Sys.getenv("USER"), "inputs"),
-#   modulePath = file.path("~/project", Sys.getenv("USER"))
-# )
-
 setPaths(
   inputPath = "../inputs",
   modulePath = ".."
@@ -102,16 +88,6 @@ getPaths() # shows where the 4 relevant paths are
 
 modules <- list("fireSense_NWT_DataPrep")
 repo <- list("ygc2l/fireSense_NWT_DataPrep")
-
-# Download modules
-# invisible(
-#   mapply(
-#     modules,
-#     downloadModule,
-#     path = getPaths()$modulePath,
-#     repo = repo
-#   )
-# )
 
 start_year <- 1995
 end_year <- 2015
