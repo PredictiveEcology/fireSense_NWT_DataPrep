@@ -105,19 +105,22 @@ inputs <- data.frame(
 
 LCC05_BCR6_NWT <- Cache(
   prepInputs, 
-  url = "https://drive.google.com/open?id=1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN"
+  url = "https://drive.google.com/open?id=1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN", 
+  destinationPath = tempdir()
 )
 
 NFDB_PO_BCR6_NWT <- Cache(
   prepInputs, 
   url = "https://drive.google.com/open?id=15Fl6XCsNTZtA2G3py0Ma5ZTaESWwn622",
-  fun = "sf::st_read"
+  fun = "sf::st_read",
+  destinationPath = tempdir()
 )
 
 NFDB_PT_BCR6_NWT <- Cache(
   prepInputs, 
   url = "https://drive.google.com/open?id=1HU2lGMYmMoyXkDVjYLGhvAiC0ZkY-XMg",
-  fun = "sf::st_read"
+  fun = "sf::st_read",
+  destinationPath = tempdir()
 )
 
 objects <- list(
