@@ -230,6 +230,7 @@ PrepThisYearFire <- function(sim)
   currentYear <- time(sim, "year")
   
   NFDB_PT_BCR6_NWT <- NFDB_PT_BCR6_NWT %>%
+    
     # Filter fire data for the current year
     dplyr::filter(YEAR == currentYear) %>%
     
