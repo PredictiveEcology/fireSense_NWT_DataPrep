@@ -136,7 +136,7 @@ mySim <- simInit(
   inputs = inputs,
   times = times, 
   params = parameters, 
-  modules = modules,
+  modules = list("fireSense_NWT_DataPrep"),
   objects = objects
 )
 
