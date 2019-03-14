@@ -107,7 +107,7 @@ Init <- function(sim)
 {
   wetLCC <- Cache(
     reproducible::prepInputs,
-    destinationPath = dataPath(sim), # Or another directory.
+    destinationPath = tempdir(), # Or another directory.
     url = "https://drive.google.com/open?id=1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm",
     targetFile = "wetlandsNWT250m.tif",
     rasterToMatch = sim[["LCC05_BCR6_NWT"]],
@@ -150,7 +150,7 @@ PrepThisYearMDC <- function(sim)
       unstack(sim[["MDC_BCR6_NWT_250m"]]),
       postProcess,
       rasterToMatch = mod$RTM,
-      destinationPath = dataPath(sim),
+      destinationPath = tempdir(),
       maskWithRTM = TRUE,
       method = "bilinear",
       datatype = "FLT4S",
