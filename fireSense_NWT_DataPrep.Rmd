@@ -80,6 +80,7 @@ which are reclassified by this module as:
 library(SpaDES)
 
 setPaths(
+  cachePath = "../cache",
   inputPath = "../inputs",
   modulePath = ".."
 )
@@ -104,6 +105,7 @@ inputs <- data.frame(
 )
 
 LCC05_BCR6_NWT <- Cache(
+  targetFile = "LCC2005_V1_4a_BCR6_NWT.tif",
   prepInputs, 
   url = "https://drive.google.com/open?id=1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN", 
   destinationPath = tempdir()
@@ -132,6 +134,7 @@ objects <- list(
 
 mySim <- simInit(
   inputs = inputs,
+  objects = objects,
   times = times, 
   params = parameters, 
   modules = modules,
