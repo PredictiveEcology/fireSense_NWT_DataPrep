@@ -20,6 +20,8 @@ defineModule(sim, list(
     defineParameter(name = "res", class = "numeric", default = 10000,
                     desc = "at which resolution should we aggregate the data? By
                             default, 10km."),
+    defineParameter(name = "train", class = "logical", default = TRUE,
+                    desc = "train or predict mode. Defaults is TRUE, or train mode."),
     defineParameter(name = ".runInitialTime", class = "numeric", default = start(sim),
                     desc = "when to start this module? By default, the start 
                             time of the simulation."),
@@ -75,6 +77,11 @@ defineModule(sim, list(
       objectName = "dataFireSense_FrequencyFit", 
       objectClass = "data.frame", 
       desc = "Contains MDC, land-cover, fire data necessary to train the fireSense_FrequencyFit SpaDES module for BCR6 as contained in the Northwest Territories."
+    ),
+    createsOutput(
+      objectName = "LCC", 
+      objectClass = "RasterStack", 
+      desc = "Contains LCC classes. Necessary to predict with fireSense for BCR6 as contained in the Northwest Territories."
     )
   )
 ))
@@ -123,19 +130,22 @@ Init <- function(sim)
   mod[["LCC05_BCR6_NWT"]][wetLCC == 1] <- 37 # LCC05 code for Water bodies
   mod[["LCC05_BCR6_NWT"]][wetLCC == 2] <- 19 # LCC05 code for Wetlands
   
-  mod[["RTM"]] <- Cache(
-    aggregate,
-    sim[["LCC05_BCR6_NWT"]],
-    fact = P(sim)$res / xres(sim[["LCC05_BCR6_NWT"]]),
-    fun = function(x, ...) if (anyNA(x)) NA else 1
-  )
-  
-  mod[["PX_ID"]] <- tibble(PX_ID = which(!is.na(mod[["RTM"]][])))
-  
-  mod[["RTM_VT"]] <- bind_cols(
-    st_as_sf(rasterToPolygons(mod[["RTM"]])),
-    mod[["PX_ID"]]
-  )
+  if (P(sim)$train)
+  {
+    mod[["RTM"]] <- Cache(
+      aggregate,
+      sim[["LCC05_BCR6_NWT"]],
+      fact = P(sim)$res / xres(sim[["LCC05_BCR6_NWT"]]),
+      fun = function(x, ...) if (anyNA(x)) NA else 1
+    )
+    
+    mod[["PX_ID"]] <- tibble(PX_ID = which(!is.na(mod[["RTM"]][])))
+    
+    mod[["RTM_VT"]] <- bind_cols(
+      st_as_sf(rasterToPolygons(mod[["RTM"]])),
+      mod[["PX_ID"]]
+    )
+  }
   
   sim <- scheduleEvent(sim, eventTime = P(sim)$.runInitialTime, "fireSense_NWT_DataPrep", "run")
   invisible(sim)
@@ -168,7 +178,7 @@ PrepThisYearLCC <- function(sim)
   #
   # LCC05 with incremental disturbances
   #
-  LCC05 <- Cache(
+  sim[["LCC"]] <- Cache(
     # cloudFolderID = sim[["cloudFolderID"]],
     `[<-`,
     x = mod[["LCC05_BCR6_NWT"]],
@@ -194,33 +204,35 @@ PrepThisYearLCC <- function(sim)
     value = 34 # LCC05 code for recent burns
   )
   
-  mod[["LCC05_BCR6_NWT"]] <- raster(paste0("LCC05_incr_dist_", time(sim, "year"), ".tif"))
-  
-  n_lcc <- 39
-  
-  mod$pp_lcc <-
-    lapply(
-      1:n_lcc,
-      function(cl_i)
-      {
-        calc_prop_lcc <- function(x, cl = cl_i, na.rm = TRUE)
+  if (P(sim)$train)
+  {
+    n_lcc <- 39
+    
+    mod$pp_lcc <-
+      lapply(
+        1:n_lcc,
+        function(cl_i)
         {
-          if (anyNA(x)) return(NA)
-          sum(x == cl, na.rm = na.rm) / (agg_fact ** 2)
+          calc_prop_lcc <- function(x, cl = cl_i, na.rm = TRUE)
+          {
+            if (anyNA(x)) return(NA)
+            sum(x == cl, na.rm = na.rm) / (agg_fact ** 2)
+          }
+          
+          col_name <- paste0("cl", cl_i)
+          agg_fact <- P(sim)$res / xres(mod[["LCC05_BCR6_NWT"]])
+          
+          tibble(
+            !!col_name := aggregate(
+              mod[["LCC05_BCR6_NWT"]],
+              fact = agg_fact,
+              fun = calc_prop_lcc
+            )[]
+          )
         }
-        
-        col_name <- paste0("cl", cl_i)
-        agg_fact <- P(sim)$res / xres(mod[["LCC05_BCR6_NWT"]])
-        
-        tibble(
-          !!col_name := aggregate(
-            mod[["LCC05_BCR6_NWT"]],
-            fact = agg_fact,
-            fun = calc_prop_lcc
-          )[]
-        )
-      }
-    ) %>% bind_cols %>% filter_at(2, all_vars(!is.na(.)))
+      ) %>% bind_cols %>% filter_at(2, all_vars(!is.na(.)))
+    
+  }
   
   invisible(sim)
 }
@@ -256,77 +268,84 @@ PrepThisYearFire <- function(sim)
 
 Run <- function(sim) 
 {
-  sim <- PrepThisYearMDC(sim)
+  if (P(sim)$train)
+  {
+    sim <- PrepThisYearMDC(sim) 
+    sim <- PrepThisYearFire(sim)
+  }
+  
   sim <- PrepThisYearLCC(sim)
-  sim <- PrepThisYearFire(sim)
   
-  #
-  # Prepare input data for the fireSense_FrequencyFit module
-  #
-  sim[["dataFireSense_FrequencyFit"]] <- bind_rows(
-    sim[["dataFireSense_FrequencyFit"]],
-    bind_cols(
-      mod[["fires"]] %>%
-        group_by(PX_ID, YEAR) %>%
-        summarise(n_fires = n()) %>%
-        ungroup %>%
-        right_join(mod[["PX_ID"]], by = "PX_ID") %>%
-        mutate(YEAR = time(sim, "year"), n_fires = ifelse(is.na(n_fires), 0, n_fires)),
-      rename(
-        as_tibble(mod[["MDC"]][mod[["PX_ID"]][["PX_ID"]]]),
-        MDC04 = 1,
-        MDC05 = 2,
-        MDC06 = 3,
-        MDC07 = 4,
-        MDC08 = 5,
-        MDC09 = 6
-      ) %>% dplyr::select(MDC06),
-      mod[["pp_lcc"]]
+  if (P(sim)$train)
+  {
+    #
+    # Prepare input data for the fireSense_FrequencyFit module
+    #
+    sim[["dataFireSense_FrequencyFit"]] <- bind_rows(
+      sim[["dataFireSense_FrequencyFit"]],
+      bind_cols(
+        mod[["fires"]] %>%
+          group_by(PX_ID, YEAR) %>%
+          summarise(n_fires = n()) %>%
+          ungroup %>%
+          right_join(mod[["PX_ID"]], by = "PX_ID") %>%
+          mutate(YEAR = time(sim, "year"), n_fires = ifelse(is.na(n_fires), 0, n_fires)),
+        rename(
+          as_tibble(mod[["MDC"]][mod[["PX_ID"]][["PX_ID"]]]),
+          MDC04 = 1,
+          MDC05 = 2,
+          MDC06 = 3,
+          MDC07 = 4,
+          MDC08 = 5,
+          MDC09 = 6
+        ) %>% dplyr::select(MDC06),
+        mod[["pp_lcc"]]
+      )
     )
-  )
-  
-  #
-  ## Filter out pixels where at least one variable evaluates to 0
-  #
-  ### Filter out pixels where none of the classes of interest are present
-  #
-  sim[["dataFireSense_FrequencyFit"]] %<>%
-    dplyr::filter(
-      (
-        dplyr::select(., paste0("cl", c(1:32, 34:35))) %>% # 33, 36:39 do not burn. No need to estimate coefficients, it's 0.
-          rowSums()
-      ) != 0
+    
+    #
+    ## Filter out pixels where at least one variable evaluates to 0
+    #
+    ### Filter out pixels where none of the classes of interest are present
+    #
+    sim[["dataFireSense_FrequencyFit"]] %<>%
+      dplyr::filter(
+        (
+          dplyr::select(., paste0("cl", c(1:32, 34:35))) %>% # 33, 36:39 do not burn. No need to estimate coefficients, it's 0.
+            rowSums()
+        ) != 0
+      )
+    
+    #
+    ### Filter out pixels where MDC06 is > 0
+    #
+    sim[["dataFireSense_FrequencyFit"]] %<>% dplyr::filter(MDC06 > 0)
+    
+    #
+    # Prepare input data for the fireSense_EscapeFit module
+    #  
+    fire_escape_data <- mod[["fires"]] %>%
+      group_by(PX_ID, YEAR) %>%
+      summarise(n_fires = n(), escaped = sum(SIZE_HA > 1)) %>%
+      ungroup
+    
+    sim[["dataFireSense_EscapeFit"]] <- bind_rows(
+      sim[["dataFireSense_EscapeFit"]],
+      bind_cols(
+        fire_escape_data,
+        rename(
+          as_tibble(mod[["MDC"]][fire_escape_data[["PX_ID"]]]),
+          MDC04 = 1,
+          MDC05 = 2,
+          MDC06 = 3,
+          MDC07 = 4,
+          MDC08 = 5,
+          MDC09 = 6
+        ) %>% dplyr::select(MDC06),
+        dplyr::filter(mod[["pp_lcc"]], mod[["PX_ID"]][["PX_ID"]] %in% fire_escape_data[["PX_ID"]])
+      )
     )
-  
-  #
-  ### Filter out pixels where MDC06 is > 0
-  #
-  sim[["dataFireSense_FrequencyFit"]] %<>% dplyr::filter(MDC06 > 0)
-  
-  #
-  # Prepare input data for the fireSense_EscapeFit module
-  #  
-  fire_escape_data <- mod[["fires"]] %>%
-    group_by(PX_ID, YEAR) %>%
-    summarise(n_fires = n(), escaped = sum(SIZE_HA > 1)) %>%
-    ungroup
-
-  sim[["dataFireSense_EscapeFit"]] <- bind_rows(
-    sim[["dataFireSense_EscapeFit"]],
-    bind_cols(
-      fire_escape_data,
-      rename(
-        as_tibble(mod[["MDC"]][fire_escape_data[["PX_ID"]]]),
-        MDC04 = 1,
-        MDC05 = 2,
-        MDC06 = 3,
-        MDC07 = 4,
-        MDC08 = 5,
-        MDC09 = 6
-      ) %>% dplyr::select(MDC06),
-      dplyr::filter(mod[["pp_lcc"]], mod[["PX_ID"]][["PX_ID"]] %in% fire_escape_data[["PX_ID"]])
-    )
-  )
+  }
   
   if (!is.na(P(sim)$.runInterval))
     sim <- scheduleEvent(sim, time(sim) + P(sim)$.runInterval, "fireSense_NWT_DataPrep", "run")
