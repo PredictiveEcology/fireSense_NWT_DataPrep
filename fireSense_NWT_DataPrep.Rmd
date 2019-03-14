@@ -134,7 +134,6 @@ objects <- list(
 
 mySim <- simInit(
   inputs = inputs,
-  objects = objects,
   times = times, 
   params = parameters, 
   modules = modules,
