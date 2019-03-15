@@ -79,6 +79,8 @@ which are reclassified by this module as:
 ```{r module_usage}
 library(SpaDES)
 
+cloudFolderID <- "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkEHDc0"
+
 setPaths(
   cachePath = "../cache",
   inputPath = "../inputs",
@@ -95,8 +97,6 @@ parameters <- list(
   fireSense_NWT_DataPrep = list(res = 10000)
 )
 
-cloudFolderID <- "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkEHDc0"
-
 inputs <- data.frame(
    files = dir(getPaths()$inputPath, pattern = "MDCs_.*_BCR6_NWT_250m[.]tif$"),
    functions = "raster::stack",
@@ -104,32 +104,8 @@ inputs <- data.frame(
    loadTime = start_year:end_year
 )
 
-LCC05_BCR6_NWT <- Cache(
-  targetFile = "LCC2005_V1_4a_BCR6_NWT.tif",
-  prepInputs, 
-  url = "https://drive.google.com/open?id=1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN", 
-  destinationPath = tempdir()
-)
-
-NFDB_PO_BCR6_NWT <- Cache(
-  prepInputs, 
-  url = "https://drive.google.com/open?id=15Fl6XCsNTZtA2G3py0Ma5ZTaESWwn622",
-  fun = "sf::st_read",
-  destinationPath = tempdir()
-)
-
-NFDB_PT_BCR6_NWT <- Cache(
-  prepInputs, 
-  url = "https://drive.google.com/open?id=1HU2lGMYmMoyXkDVjYLGhvAiC0ZkY-XMg",
-  fun = "sf::st_read",
-  destinationPath = tempdir()
-)
-
 objects <- list(
-  cloudFolderID = cloudFolderID,
-  LCC05_BCR6_NWT = LCC05_BCR6_NWT,
-  NFDB_PO_BCR6_NWT = NFDB_PO_BCR6_NWT,
-  NFDB_PT_BCR6_NWT = NFDB_PT_BCR6_NWT
+  cloudFolderID = cloudFolderID
 )
 
 mySim <- simInit(

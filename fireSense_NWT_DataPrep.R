@@ -115,13 +115,13 @@ Init <- function(sim)
   wetLCC <- Cache(
     reproducible::prepInputs,
     destinationPath = tempdir(), # Or another directory.
-    url = "https://drive.google.com/open?id=1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm",
+    url = "https://drive.google.com/file/d/1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm/view",
     targetFile = "wetlandsNWT250m.tif",
     rasterToMatch = sim[["LCC05_BCR6_NWT"]],
     maskWithRTM = TRUE,
     filename2 = NULL
   )
- 
+  
   # wetLCC code for Water 1
   # wetLCC code for Wetlands 2
   # wetLCC code for Uplands 3
@@ -174,11 +174,11 @@ PrepThisYearMDC <- function(sim)
 PrepThisYearLCC <- function(sim)
 {
   year <- time(sim, "year")
-
+  
   #
   # LCC05 with incremental disturbances
   #
-  sim[["LCC"]] <- Cache(
+  Cache(
     # cloudFolderID = sim[["cloudFolderID"]],
     `[<-`,
     x = mod[["LCC05_BCR6_NWT"]],
@@ -190,7 +190,7 @@ PrepThisYearLCC <- function(sim)
         x = SpatialPolygonsDataFrame(
           as(
             st_union(
-              filter(sim[["NFDB_PO_BCR6_NWT"]], YEAR > (year - 15) & YEAR <= year)
+              dplyr::filter(sim[["NFDB_PO_BCR6_NWT"]], YEAR > (year - 15) & YEAR <= year)
             ),
             "Spatial"
           ),
@@ -231,7 +231,18 @@ PrepThisYearLCC <- function(sim)
           )
         }
       ) %>% bind_cols %>% filter_at(2, all_vars(!is.na(.)))
-    
+  }
+  else
+  {
+    sim[["LCC"]] <- setNames(
+      raster::stack(
+        lapply(
+          c(1:32, 34:35),
+          function(x) mod[["LCC05_BCR6_NWT"]] == x
+        )
+      ),
+      nm = paste0("cl", c(1:32, 34:35))
+    )
   }
   
   invisible(sim)
@@ -346,6 +357,10 @@ Run <- function(sim)
       )
     )
   }
+  else
+  {
+    names(sim[["MDC06"]]) <- "MDC06"
+  }
   
   if (!is.na(P(sim)$.runInterval))
     sim <- scheduleEvent(sim, time(sim) + P(sim)$.runInterval, "fireSense_NWT_DataPrep", "run")
@@ -367,6 +382,36 @@ Run <- function(sim)
   # if (!suppliedElsewhere('defaultColor', sim)) {
   #   sim$map <- Cache(prepInputs, extractURL('map')) # download, extract, load file from url in sourceURL
   # }
+  
+  if (!suppliedElsewhere(object = "LCC05_BCR6_NWT", sim = sim))
+  {
+    sim[["LCC05_BCR6_NWT"]] <- Cache(
+      targetFile = "LCC2005_V1_4a_BCR6_NWT.tif",
+      prepInputs, 
+      url = "https://drive.google.com/file/d/1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN/view", 
+      destinationPath = tempdir()
+    )
+  }
+  
+  if (!suppliedElsewhere(object = "NFDB_PO_BCR6_NWT", sim = sim))
+  {
+    sim[["NFDB_PO_BCR6_NWT"]] <- Cache(
+      prepInputs, 
+      url = "https://drive.google.com/file/d/15Fl6XCsNTZtA2G3py0Ma5ZTaESWwn622/view",
+      fun = "sf::st_read",
+      destinationPath = tempdir()
+    )
+  }
+  
+  if (!suppliedElsewhere(object = "NFDB_PT_BCR6_NWT", sim = sim))
+  {
+    sim[["NFDB_PT_BCR6_NWT"]] <- Cache(
+      prepInputs, 
+      url = "https://drive.google.com/file/d/1HU2lGMYmMoyXkDVjYLGhvAiC0ZkY-XMg/view",
+      fun = "sf::st_read",
+      destinationPath = tempdir()
+    )
+  }
   
   cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
