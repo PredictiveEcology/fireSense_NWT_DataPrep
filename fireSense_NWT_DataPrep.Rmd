@@ -116,7 +116,7 @@ mySim <- simInit(
   objects = objects
 )
 
-mySimOut <- spades(mySim, debug = TRUE)
+mySimOut <- spades(mySim)
 ```
 
 # Events

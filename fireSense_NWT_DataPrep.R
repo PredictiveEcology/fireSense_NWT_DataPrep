@@ -14,7 +14,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "fireSense_NWT_DataPrep.Rmd"),
-  reqdPkgs = list("dplyr", "raster", "rlang", "sf", "tibble"),
+  reqdPkgs = list("dplyr", "magrittr", "raster", "rlang", "sf", "tibble"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
     defineParameter(name = "res", class = "numeric", default = 10000,
