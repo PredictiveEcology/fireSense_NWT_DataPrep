@@ -178,31 +178,36 @@ PrepThisYearLCC <- function(sim)
   #
   # LCC05 with incremental disturbances
   #
-  Cache(
-    # cloudFolderID = sim[["cloudFolderID"]],
-    `[<-`,
-    x = mod[["LCC05_BCR6_NWT"]],
-    i = {
-      # Calculate proportion of recently disturbed areas for each pixel of LCC05
-      Cache(
-        # cloudFolderID = sim[["cloudFolderID"]],
-        rasterize,
-        x = SpatialPolygonsDataFrame(
-          as(
-            st_union(
-              dplyr::filter(sim[["NFDB_PO_BCR6_NWT"]], YEAR > (year - 15) & YEAR <= year)
+  fires_this_year <- dplyr::filter(sim[["NFDB_PO_BCR6_NWT"]], YEAR > (year - 15) & YEAR <= year)
+  
+  if (nrow(fires_this_year) > 0)
+  {
+    Cache(
+      # cloudFolderID = sim[["cloudFolderID"]],
+      `[<-`,
+      x = mod[["LCC05_BCR6_NWT"]],
+      i = {
+        # Calculate proportion of recently disturbed areas for each pixel of LCC05
+        Cache(
+          # cloudFolderID = sim[["cloudFolderID"]],
+          rasterize,
+          x = SpatialPolygonsDataFrame(
+            as(
+              st_union(
+                fires_this_year
+              ),
+              "Spatial"
             ),
-            "Spatial"
+            data = data.frame(ID = 1),
+            match.ID = FALSE
           ),
-          data = data.frame(ID = 1),
-          match.ID = FALSE
-        ),
-        y = mod[["LCC05_BCR6_NWT"]],
-        getCover = TRUE
-      )[] >= .5
-    },
-    value = 34 # LCC05 code for recent burns
-  )
+          y = mod[["LCC05_BCR6_NWT"]],
+          getCover = TRUE
+        )[] >= .5
+      },
+      value = 34 # LCC05 code for recent burns
+    )
+  }
   
   if (P(sim)$train)
   {
