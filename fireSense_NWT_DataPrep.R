@@ -42,10 +42,10 @@ defineModule(sim, list(
       desc = "GDrive folder ID for cloud caching."
     ),
     expectsInput(
-      objectName = "LCC05_BCR6_NWT",
-      objectClass = "matrix",
-      sourceURL = "https://drive.google.com/open?id=1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN",
-      desc = "Land Cover Map of Canada 2005 (LCC05) within BCR6 as contained in the Northwest Territories."
+      objectName = "LCC05",
+      objectClass = "RasterLayer",
+      sourceURL = "https://drive.google.com/open?id=1ziUPnFZMamA5Yi6Hhex9aZKerXLpVxvz",
+      desc = "Land Cover Map of Canada 2005 (LCC05)."
     ),
     expectsInput(
       objectName = "MDC_BCR6_NWT_250m",
@@ -54,16 +54,28 @@ defineModule(sim, list(
       desc = "Monthly Drought Code (April to September) within BCR6 as contained in the Northwest Territories."
     ),
     expectsInput(
-      objectName = "NFDB_PO_BCR6_NWT",
+      objectName = "NFDB_PO",
       objectClass = "sf",
-      sourceURL = "https://drive.google.com/open?id=15Fl6XCsNTZtA2G3py0Ma5ZTaESWwn622",
-      desc = "National Fire DataBase polygon data (NFDB_PO) within BCR6 as contained in the Northwest Territories."
+      sourceURL = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_poly/current_version/NFDB_poly.zip",
+      desc = "National Fire DataBase polygon data (NFDB_PO)."
     ),
     expectsInput(
-      objectName = "NFDB_PT_BCR6_NWT",
+      objectName = "NFDB_PT",
       objectClass = "sf",
-      sourceURL = "https://drive.google.com/open?id=1HU2lGMYmMoyXkDVjYLGhvAiC0ZkY-XMg",
-      desc = "National Fire DataBase point data (NFDB_PT) within BCR6 as contained in the Northwest Territories."
+      sourceURL = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_pnt/current_version/NFDB_point.zip",
+      desc = "National Fire DataBase point data (NFDB_PT)."
+    ),
+    expectsInput(
+      objectName = "rasterToMatch", 
+      objectClass = "RasterLayer",
+      sourceURL = "https://drive.google.com/open?id=1NIjFbkckG3sewkTqPGaBGQDQLboPQ0wc",
+      desc = "a template raster describing the studyArea"
+    ),
+    expectsInput(
+      objectName = "studyArea", 
+      objectClass = "SpatialPolygonsDataFrame",
+      sourceURL = "https://drive.google.com/open?id=1LUxoY2-pgkCmmNH5goagBp3IMpj6YrdU",
+      desc = "a template polygon describing the studyArea"
     )
   ),
   outputObjects = bind_rows(
@@ -112,30 +124,56 @@ doEvent.fireSense_NWT_DataPrep = function(sim, eventTime, eventType)
 ### template initialization
 Init <- function(sim) 
 {
+  
+  # smallSR <- shapefile("~/Desktop/smallSR.shp")
+  # names(smallSR) <- "PolyID"
+  # 
+  # sim[["vegMap"]] <- postProcess(
+  #   sim[["vegMap"]], 
+  #   studyArea = smallSR,
+  #   filename2 = NULL
+  # )
+  
+  
   wetLCC <- Cache(
     reproducible::prepInputs,
     destinationPath = tempdir(), # Or another directory.
     url = "https://drive.google.com/file/d/1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm/view",
     targetFile = "wetlandsNWT250m.tif",
-    rasterToMatch = sim[["LCC05_BCR6_NWT"]],
+    rasterToMatch = sim[["vegMap"]],
     maskWithRTM = TRUE,
     filename2 = NULL
   )
+  
+  # sim[["NFDB_PO"]] <- as(
+  #   postProcess(
+  #     as_Spatial(sim[["NFDB_PO"]]), 
+  #     studyArea = smallSR,
+  #     filename2 = NULL
+  #   ),
+  #   "sf"
+  # )
+  
+  # sim[["MDC06"]] <- postProcess(
+  #   sim[["MDC06"]],
+  #   studyArea = smallSR,
+  #   filename2 = NULL
+  # )
   
   # wetLCC code for Water 1
   # wetLCC code for Wetlands 2
   # wetLCC code for Uplands 3
   
-  mod[["LCC05_BCR6_NWT"]] <- sim[["LCC05_BCR6_NWT"]]
-  mod[["LCC05_BCR6_NWT"]][wetLCC == 1] <- 37 # LCC05 code for Water bodies
-  mod[["LCC05_BCR6_NWT"]][wetLCC == 2] <- 19 # LCC05 code for Wetlands
+  mod[["vegMap"]] <- sim[["vegMap"]]
+  mod[["vegMap"]][wetLCC == 1] <- 37 # LCC05 code for Water bodies
+  mod[["vegMap"]][wetLCC == 2] <- 19 # LCC05 code for Wetlands
   
   if (P(sim)$train)
   {
     mod[["RTM"]] <- Cache(
       aggregate,
-      sim[["LCC05_BCR6_NWT"]],
-      fact = P(sim)$res / xres(sim[["LCC05_BCR6_NWT"]]),
+      sim[["vegMap"]],
+      fact = P(sim)$res / xres(sim[["vegMap"]]),
       fun = function(x, ...) if (anyNA(x)) NA else 1
     )
     
@@ -178,14 +216,14 @@ PrepThisYearLCC <- function(sim)
   #
   # LCC05 with incremental disturbances
   #
-  fires_this_year <- dplyr::filter(sim[["NFDB_PO_BCR6_NWT"]], YEAR > (year - 15) & YEAR <= year)
+  fires_this_year <- dplyr::filter(sim[["NFDB_PO"]], YEAR > (year - 15) & YEAR <= year)
   
   if (nrow(fires_this_year) > 0)
   {
     Cache(
       # cloudFolderID = sim[["cloudFolderID"]],
       `[<-`,
-      x = mod[["LCC05_BCR6_NWT"]],
+      x = mod[["vegMap"]],
       i = {
         # Calculate proportion of recently disturbed areas for each pixel of LCC05
         Cache(
@@ -201,7 +239,7 @@ PrepThisYearLCC <- function(sim)
             data = data.frame(ID = 1),
             match.ID = FALSE
           ),
-          y = mod[["LCC05_BCR6_NWT"]],
+          y = mod[["vegMap"]],
           getCover = TRUE
         )[] >= .5
       },
@@ -225,11 +263,11 @@ PrepThisYearLCC <- function(sim)
           }
           
           col_name <- paste0("cl", cl_i)
-          agg_fact <- P(sim)$res / xres(mod[["LCC05_BCR6_NWT"]])
+          agg_fact <- P(sim)$res / xres(mod[["vegMap"]])
           
           tibble(
             !!col_name := aggregate(
-              mod[["LCC05_BCR6_NWT"]],
+              mod[["vegMap"]],
               fact = agg_fact,
               fun = calc_prop_lcc
             )[]
@@ -243,7 +281,7 @@ PrepThisYearLCC <- function(sim)
       raster::stack(
         lapply(
           c(1:32, 34:35),
-          function(x) mod[["LCC05_BCR6_NWT"]] == x
+          function(x) mod[["vegMap"]] == x
         )
       ),
       nm = paste0("cl", c(1:32, 34:35))
@@ -257,7 +295,7 @@ PrepThisYearFire <- function(sim)
 {
   currentYear <- time(sim, "year")
   
-  NFDB_PT_BCR6_NWT <- NFDB_PT_BCR6_NWT %>%
+  NFDB_PT <- NFDB_PT %>%
     
     # Filter fire data for the current year
     dplyr::filter(YEAR == currentYear) %>%
@@ -271,7 +309,7 @@ PrepThisYearFire <- function(sim)
   mod[["fires"]] <- st_set_geometry(
     mutate(
       filter(
-        st_join(mod[["RTM_VT"]], NFDB_PT_BCR6_NWT),
+        st_join(mod[["RTM_VT"]], NFDB_PT),
         !is.na(YEAR)
       ),
       YEAR = currentYear
@@ -388,33 +426,77 @@ Run <- function(sim)
   #   sim$map <- Cache(prepInputs, extractURL('map')) # download, extract, load file from url in sourceURL
   # }
   
-  if (!suppliedElsewhere(object = "LCC05_BCR6_NWT", sim = sim))
+  if (!suppliedElsewhere(object = "rasterToMatch", sim = sim))
   {
-    sim[["LCC05_BCR6_NWT"]] <- Cache(
-      targetFile = "LCC2005_V1_4a_BCR6_NWT.tif",
+    sim[["rasterToMatch"]] <- Cache(
+      targetFile = "BCR6_NWT-2.tif",
       prepInputs, 
-      url = "https://drive.google.com/file/d/1WhL-DxrByCbzAj8A7eRx3Y1FVujtGmtN/view", 
+      url = "https://drive.google.com/open?id=1NIjFbkckG3sewkTqPGaBGQDQLboPQ0wc",
       destinationPath = tempdir()
     )
   }
   
-  if (!suppliedElsewhere(object = "NFDB_PO_BCR6_NWT", sim = sim))
+  
+  if (!suppliedElsewhere(object = "studyArea", sim = sim))
   {
-    sim[["NFDB_PO_BCR6_NWT"]] <- Cache(
+    sim[["studyArea"]] <- Cache(
       prepInputs, 
-      url = "https://drive.google.com/file/d/15Fl6XCsNTZtA2G3py0Ma5ZTaESWwn622/view",
-      fun = "sf::st_read",
+      url = "https://drive.google.com/open?id=1LUxoY2-pgkCmmNH5goagBp3IMpj6YrdU",
       destinationPath = tempdir()
     )
   }
   
-  if (!suppliedElsewhere(object = "NFDB_PT_BCR6_NWT", sim = sim))
+  if (!suppliedElsewhere(object = "vegMap", sim = sim))
   {
-    sim[["NFDB_PT_BCR6_NWT"]] <- Cache(
+    sim[["vegMap"]] <- Cache(
+      targetFile = "LCC2005_V1_4a.tif",
       prepInputs, 
-      url = "https://drive.google.com/file/d/1HU2lGMYmMoyXkDVjYLGhvAiC0ZkY-XMg/view",
-      fun = "sf::st_read",
+      url = "https://drive.google.com/open?id=1ziUPnFZMamA5Yi6Hhex9aZKerXLpVxvz",
+      destinationPath = tempdir(),
+      rasterToMatch = sim[["rasterToMatch"]],
+      maskWithRTM = TRUE,
+      studyArea = sim[["studyArea"]],
+      filename2 = NULL,
+      overwrite = TRUE
+    )
+  }
+  
+  if (!suppliedElsewhere(object = "NFDB_PO", sim = sim))
+  {
+    sim[["NFDB_PO"]] <- Cache(
+      prepInputs, 
+      url = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_poly/current_version/NFDB_poly.zip",
       destinationPath = tempdir()
+    )
+  }
+  
+  if (!suppliedElsewhere(object = "NFDB_PT", sim = sim))
+  {
+    sim[["NFDB_PT"]] <- Cache(
+      prepInputs, 
+      url = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_pnt/current_version/NFDB_point.zip",
+      destinationPath = tempdir(),
+      rasterToMatch = sim[["rasterToMatch"]],
+      maskWithRTM = TRUE,
+      studyArea = sim[["studyArea"]],
+      filename2 = NULL,
+      overwrite = TRUE
+    )
+  }
+
+  if (!suppliedElsewhere(object = "vegMap", sim = sim))
+  {
+    sim[["vegMap"]] <- Cache(
+      postProcess,
+      sim[["vegMap"]],
+      studyArea = sim[["studyArea"]],
+      rasterToMatch = sim[["rasterToMatch"]],
+      destinationPath = tempdir(),
+      rasterToMatch = sim[["rasterToMatch"]],
+      maskWithRTM = TRUE,
+      studyArea = sim[["studyArea"]],
+      filename2 = NULL,
+      overwrite = TRUE
     )
   }
   
