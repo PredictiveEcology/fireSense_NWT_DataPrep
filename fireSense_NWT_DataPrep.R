@@ -105,8 +105,17 @@ doEvent.fireSense_NWT_DataPrep = function(sim, eventTime, eventType)
 {
   switch(
     eventType,
-    init = { sim <- Init(sim) },
-    run = { sim <- Run(sim) },
+    init = { 
+      sim <- Init(sim)
+      sim <- Run(sim) # Hack of the Friday afternoon --'
+      sim <- scheduleEvent(sim, eventTime = P(sim)$.runInitialTime + 1, "fireSense_NWT_DataPrep", "run")
+    },
+    run = { 
+      sim <- Run(sim) 
+      
+      if (!is.na(P(sim)$.runInterval))
+        sim <- scheduleEvent(sim, time(sim) + P(sim)$.runInterval, "fireSense_NWT_DataPrep", "run")
+    },
     warning(
       paste(
         "Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
@@ -185,7 +194,6 @@ Init <- function(sim)
     )
   }
   
-  sim <- scheduleEvent(sim, eventTime = P(sim)$.runInitialTime, "fireSense_NWT_DataPrep", "run")
   invisible(sim)
 }
 
@@ -216,7 +224,8 @@ PrepThisYearLCC <- function(sim)
   #
   # LCC05 with incremental disturbances
   #
-  fires_this_year <- dplyr::filter(sim[["NFDB_PO"]], YEAR > (year - 15) & YEAR <= year)
+  fires_this_year <- sim[["NFDB_PO"]] %>%
+    dplyr::filter(YEAR > (year - 15) & YEAR <= year)
   
   if (nrow(fires_this_year) > 0)
   {
@@ -277,7 +286,8 @@ PrepThisYearLCC <- function(sim)
   }
   else
   {
-    sim[["LCC"]] <- setNames(
+    sim[["LCC"]] <- Cache(
+      setNames,
       raster::stack(
         lapply(
           c(1:32, 34:35),
@@ -404,9 +414,7 @@ Run <- function(sim)
   {
     names(sim[["MDC06"]]) <- "MDC06"
   }
-  
-  if (!is.na(P(sim)$.runInterval))
-    sim <- scheduleEvent(sim, time(sim) + P(sim)$.runInterval, "fireSense_NWT_DataPrep", "run")
+
   
   invisible(sim)
 }
@@ -440,7 +448,7 @@ Run <- function(sim)
   if (!suppliedElsewhere(object = "studyArea", sim = sim))
   {
     sim[["studyArea"]] <- Cache(
-      prepInputs, 
+      prepInputs,
       url = "https://drive.google.com/open?id=1LUxoY2-pgkCmmNH5goagBp3IMpj6YrdU",
       destinationPath = tempdir()
     )
@@ -464,9 +472,14 @@ Run <- function(sim)
   if (!suppliedElsewhere(object = "NFDB_PO", sim = sim))
   {
     sim[["NFDB_PO"]] <- Cache(
-      prepInputs, 
+      prepInputs,
       url = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_poly/current_version/NFDB_poly.zip",
-      destinationPath = tempdir()
+      fun = "sf::st_read",
+      destinationPath = tempdir(),
+      studyArea = sim[["studyArea"]],
+      useSAcrs = TRUE,
+      filename2 = NULL,
+      overwrite = TRUE
     )
   }
   
@@ -475,26 +488,10 @@ Run <- function(sim)
     sim[["NFDB_PT"]] <- Cache(
       prepInputs, 
       url = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_pnt/current_version/NFDB_point.zip",
+      fun = "sf::st_read",
       destinationPath = tempdir(),
-      rasterToMatch = sim[["rasterToMatch"]],
-      maskWithRTM = TRUE,
       studyArea = sim[["studyArea"]],
-      filename2 = NULL,
-      overwrite = TRUE
-    )
-  }
-
-  if (!suppliedElsewhere(object = "vegMap", sim = sim))
-  {
-    sim[["vegMap"]] <- Cache(
-      postProcess,
-      sim[["vegMap"]],
-      studyArea = sim[["studyArea"]],
-      rasterToMatch = sim[["rasterToMatch"]],
-      destinationPath = tempdir(),
-      rasterToMatch = sim[["rasterToMatch"]],
-      maskWithRTM = TRUE,
-      studyArea = sim[["studyArea"]],
+      useSAcrs = TRUE,
       filename2 = NULL,
       overwrite = TRUE
     )
