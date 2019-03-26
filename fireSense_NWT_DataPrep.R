@@ -147,6 +147,7 @@ Init <- function(sim)
   wetLCC <- Cache(
     reproducible::prepInputs,
     destinationPath = tempdir(), # Or another directory.
+    omitArgs = "destinationPath",
     url = "https://drive.google.com/file/d/1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm/view",
     targetFile = "wetlandsNWT250m.tif",
     rasterToMatch = sim[["vegMap"]],
@@ -207,6 +208,7 @@ PrepThisYearMDC <- function(sim)
       postProcess,
       rasterToMatch = mod$RTM,
       destinationPath = tempdir(),
+      omitArgs = "destinationPath",
       maskWithRTM = TRUE,
       method = "bilinear",
       datatype = "FLT4S",
@@ -440,7 +442,8 @@ Run <- function(sim)
       targetFile = "BCR6_NWT-2.tif",
       prepInputs, 
       url = "https://drive.google.com/open?id=1NIjFbkckG3sewkTqPGaBGQDQLboPQ0wc",
-      destinationPath = tempdir()
+      destinationPath = tempdir(),
+      omitArgs = "destinationPath"
     )
   }
   
@@ -450,7 +453,8 @@ Run <- function(sim)
     sim[["studyArea"]] <- Cache(
       prepInputs,
       url = "https://drive.google.com/open?id=1LUxoY2-pgkCmmNH5goagBp3IMpj6YrdU",
-      destinationPath = tempdir()
+      destinationPath = tempdir(),
+      omitArgs = "destinationPath"
     )
   }
   
@@ -461,6 +465,7 @@ Run <- function(sim)
       prepInputs, 
       url = "https://drive.google.com/open?id=1ziUPnFZMamA5Yi6Hhex9aZKerXLpVxvz",
       destinationPath = tempdir(),
+      omitArgs = "destinationPath",
       rasterToMatch = sim[["rasterToMatch"]],
       maskWithRTM = TRUE,
       studyArea = sim[["studyArea"]],
@@ -476,6 +481,7 @@ Run <- function(sim)
       url = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_poly/current_version/NFDB_poly.zip",
       fun = "sf::st_read",
       destinationPath = tempdir(),
+      omitArgs = "destinationPath",
       studyArea = sim[["studyArea"]],
       useSAcrs = TRUE,
       filename2 = NULL,
@@ -490,6 +496,7 @@ Run <- function(sim)
       url = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_pnt/current_version/NFDB_point.zip",
       fun = "sf::st_read",
       destinationPath = tempdir(),
+      omitArgs = "destinationPath",
       studyArea = sim[["studyArea"]],
       useSAcrs = TRUE,
       filename2 = NULL,
