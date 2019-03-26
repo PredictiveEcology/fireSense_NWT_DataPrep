@@ -286,9 +286,9 @@ PrepThisYearLCC <- function(sim)
   }
   else
   {
-    sim[["LCC"]] <- Cache(
-      setNames,
-      raster::stack(
+    sim[["LCC"]] <- setNames(
+      Cache(
+        raster::stack,
         lapply(
           c(1:32, 34:35),
           function(x) mod[["vegMap"]] == x
