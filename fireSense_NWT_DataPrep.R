@@ -48,6 +48,12 @@ defineModule(sim, list(
       desc = "Land Cover Map of Canada 2005 (LCC05)."
     ),
     expectsInput(
+      objectName = "vegMap",
+      objectClass = "RasterLayer",
+      sourceURL = NA,
+      desc = "Land Cover Map of Canada 2005 (LCC05) cropped."
+    ),
+    expectsInput(
       objectName = "MDC_BCR6_NWT_250m",
       objectClass = "RasterStack",
       sourceURL = NA_character_,
@@ -106,7 +112,7 @@ doEvent.fireSense_NWT_DataPrep = function(sim, eventTime, eventType)
   switch(
     eventType,
     init = { 
-      sim <- Init(sim)
+      sim <- Cache(Init, sim)
       sim <- Run(sim) # Hack of the Friday afternoon --'
       sim <- scheduleEvent(sim, eventTime = P(sim)$.runInitialTime + 1, "fireSense_NWT_DataPrep", "run")
     },
@@ -173,8 +179,10 @@ Init <- function(sim)
   # wetLCC code for Water 1
   # wetLCC code for Wetlands 2
   # wetLCC code for Uplands 3
-  
+
   mod[["vegMap"]] <- sim[["vegMap"]]
+  if (is.null(sim[["vegMap"]]))
+    stop("vegMap is still NULL. Please debug .inputObjects")
   mod[["vegMap"]][wetLCC == 1] <- 37 # LCC05 code for Water bodies
   mod[["vegMap"]][wetLCC == 2] <- 19 # LCC05 code for Wetlands
   
@@ -458,20 +466,12 @@ Run <- function(sim)
     )
   }
   
-  if (!suppliedElsewhere(object = "vegMap", sim = sim))
+  if (!suppliedElsewhere(object = "vegMap", sim = sim) | 
+      is.null(sim[["vegMap"]]))
   {
-    sim[["vegMap"]] <- Cache(
-      targetFile = "LCC2005_V1_4a.tif",
-      prepInputs, 
-      url = "https://drive.google.com/open?id=1ziUPnFZMamA5Yi6Hhex9aZKerXLpVxvz",
-      destinationPath = tempdir(),
-      omitArgs = "destinationPath",
-      rasterToMatch = sim[["rasterToMatch"]],
-      maskWithRTM = TRUE,
-      studyArea = sim[["studyArea"]],
-      filename2 = NULL,
-      overwrite = TRUE
-    )
+    sim[["vegMap"]] <- LandR::prepInputsLCC(destinationPath = dataPath(sim),
+                                            studyArea = sim$studyArea,
+                                            rasterToMatch = sim$rasterToMatch)
   }
   
   if (!suppliedElsewhere(object = "NFDB_PO", sim = sim))
