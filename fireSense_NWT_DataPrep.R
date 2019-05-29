@@ -112,7 +112,7 @@ doEvent.fireSense_NWT_DataPrep = function(sim, eventTime, eventType)
   switch(
     eventType,
     init = { 
-      sim <- Cache(Init, sim)
+      sim <- Init(sim)
       sim <- Run(sim) # Hack of the Friday afternoon --'
       sim <- scheduleEvent(sim, eventTime = P(sim)$.runInitialTime + 1, "fireSense_NWT_DataPrep", "run")
     },
@@ -148,8 +148,7 @@ Init <- function(sim)
   #   studyArea = smallSR,
   #   filename2 = NULL
   # )
-  
-  
+  message("Loading water layer...")
   wetLCC <- Cache(
     reproducible::prepInputs,
     destinationPath = tempdir(), # Or another directory.
@@ -180,14 +179,15 @@ Init <- function(sim)
   # wetLCC code for Wetlands 2
   # wetLCC code for Uplands 3
 
+message("Reclassifying water in LCC05...")
   mod[["vegMap"]] <- sim[["vegMap"]]
   if (is.null(sim[["vegMap"]]))
     stop("vegMap is still NULL. Please debug .inputObjects")
   mod[["vegMap"]][wetLCC == 1] <- 37 # LCC05 code for Water bodies
   mod[["vegMap"]][wetLCC == 2] <- 19 # LCC05 code for Wetlands
   
-  if (P(sim)$train)
-  {
+  if (P(sim)$train){
+    message("train is TRUE, preparing RTM. This should happen only if dataFireSense_EscapeFit \nand dataFireSense_FrequencyFit are not being passed.")
     mod[["RTM"]] <- Cache(
       aggregate,
       sim[["vegMap"]],
@@ -206,7 +206,6 @@ Init <- function(sim)
   invisible(sim)
 }
 
-
 PrepThisYearMDC <- function(sim)
 {
   mod[["MDC"]] <- Cache(
@@ -224,7 +223,7 @@ PrepThisYearMDC <- function(sim)
     )
   )
   
-  invisible(sim)
+  return(invisible(sim))
 }
 
 PrepThisYearLCC <- function(sim)
@@ -239,31 +238,39 @@ PrepThisYearLCC <- function(sim)
   
   if (nrow(fires_this_year) > 0)
   {
-    Cache(
-      # cloudFolderID = sim[["cloudFolderID"]],
-      `[<-`,
-      x = mod[["vegMap"]],
-      i = {
-        # Calculate proportion of recently disturbed areas for each pixel of LCC05
-        Cache(
-          # cloudFolderID = sim[["cloudFolderID"]],
-          rasterize,
-          x = SpatialPolygonsDataFrame(
-            as(
-              st_union(
-                fires_this_year
-              ),
-              "Spatial"
-            ),
-            data = data.frame(ID = 1),
-            match.ID = FALSE
-          ),
-          y = mod[["vegMap"]],
-          getCover = TRUE
-        )[] >= .5
-      },
-      value = 34 # LCC05 code for recent burns
-    )
+    # Setting the burned pixels of LCC05 to category 34 (recent burns)
+    spatialUnified <- as(st_union(fires_this_year),"Spatial")
+    spatialDF <- SpatialPolygonsDataFrame(Sr = spatialUnified, data = data.frame(ID = 1), match.ID = FALSE)
+    sfDF <- st_as_sf(spatialDF)
+    rasDF <- fasterize::fasterize(sf = sfDF, raster = mod[["vegMap"]])
+    mod[["vegMap"]][rasDF == 1] <- 34  # LCC05 code for recent burns
+
+    # This was way too slow and was failing for some reason...    
+    # Cache(
+    #   # cloudFolderID = sim[["cloudFolderID"]],
+    #   `[<-`,
+    #   x = mod[["vegMap"]],
+    #   i = {
+    #     # Calculate proportion of recently disturbed areas for each pixel of LCC05
+    #     Cache(
+    #       # cloudFolderID = sim[["cloudFolderID"]],
+    #       rasterize,
+    #       x = SpatialPolygonsDataFrame(
+    #         as(
+    #           st_union(
+    #             fires_this_year
+    #           ),
+    #           "Spatial"
+    #         ),
+    #         data = data.frame(ID = 1),
+    #         match.ID = FALSE
+    #       ),
+    #       y = mod[["vegMap"]],
+    #       getCover = TRUE
+    #     )[] >= .5
+    #   },
+    #   value = 34 # LCC05 code for recent burns
+    # )
   }
   
   if (P(sim)$train)
@@ -347,9 +354,9 @@ Run <- function(sim)
     sim <- PrepThisYearMDC(sim) 
     sim <- PrepThisYearFire(sim)
   }
-  
+
   sim <- PrepThisYearLCC(sim)
-  
+
   if (P(sim)$train)
   {
     #
@@ -426,7 +433,7 @@ Run <- function(sim)
   }
 
   
-  invisible(sim)
+  return(invisible(sim))
 }
 
 .inputObjects <- function(sim) {
