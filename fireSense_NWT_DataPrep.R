@@ -149,9 +149,7 @@ Init <- function(sim)
   #   filename2 = NULL
   # )
   message("Loading water layer...")
-  wetLCC <- Cache(
-    reproducible::prepInputs,
-    destinationPath = tempdir(), # Or another directory.
+  wetLCC <- prepInputs(destinationPath = tempdir(), # Or another directory.
     omitArgs = "destinationPath",
     url = "https://drive.google.com/file/d/1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm/view",
     targetFile = "wetlandsNWT250m.tif",
@@ -208,10 +206,12 @@ message("Reclassifying water in LCC05...")
 
 PrepThisYearMDC <- function(sim)
 {
-  mod[["MDC"]] <- Cache(
-    stack,
-    lapply(
-      unstack(sim[["MDC_BCR6_NWT_250m"]]),
+
+  mod[["MDC"]] <- 
+    raster::stack(
+      Cache(
+    lapply, 
+      raster::unstack(sim[["MDC_BCR6_NWT_250m"]]),
       postProcess,
       rasterToMatch = mod$RTM,
       destinationPath = tempdir(),
@@ -304,13 +304,8 @@ PrepThisYearLCC <- function(sim)
   else
   {
     sim[["LCC"]] <- setNames(
-      Cache(
-        raster::stack,
-        lapply(
-          c(1:32, 34:35),
-          function(x) mod[["vegMap"]] == x
-        )
-      ),
+        raster::stack(
+          Cache(lapply, c(1:32, 34:35), function(x) mod[["vegMap"]] == x)),
       nm = paste0("cl", c(1:32, 34:35))
     )
   }
@@ -454,9 +449,9 @@ Run <- function(sim)
   if (!suppliedElsewhere(object = "rasterToMatch", sim = sim))
   {
     sim[["rasterToMatch"]] <- Cache(
-      targetFile = "BCR6_NWT-2.tif",
       prepInputs, 
-      url = "https://drive.google.com/open?id=1NIjFbkckG3sewkTqPGaBGQDQLboPQ0wc",
+      url = "https://drive.google.com/open?id=1NIjFbkckG3sewkTqPGaBGQDQLboPQ0wc",      
+      targetFile = "BCR6_NWT-2.tif",
       destinationPath = tempdir(),
       omitArgs = "destinationPath"
     )
