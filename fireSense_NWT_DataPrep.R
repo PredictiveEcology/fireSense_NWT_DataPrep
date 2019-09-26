@@ -82,6 +82,12 @@ defineModule(sim, list(
       objectClass = "SpatialPolygonsDataFrame",
       sourceURL = "https://drive.google.com/open?id=1LUxoY2-pgkCmmNH5goagBp3IMpj6YrdU",
       desc = "a template polygon describing the studyArea"
+    ),
+    expectsInput( # ~ TM added on 11AUG19 --> Not defining it was causing it to be NULL in simList
+      objectName = "MDC06",
+      objectClass = "RasterLayer",
+      sourceURL = NA,
+      desc = "Rasterlayer describing the Monthly Drougth Code of June for the current year."
     )
   ),
   outputObjects = bind_rows(
@@ -342,8 +348,7 @@ PrepThisYearFire <- function(sim)
   invisible(sim)
 }
 
-Run <- function(sim) 
-{
+Run <- function(sim){
   if (P(sim)$train)
   {
     sim <- PrepThisYearMDC(sim) 
@@ -354,7 +359,6 @@ Run <- function(sim)
 
   if (P(sim)$train)
   {
-    #
     # Prepare input data for the fireSense_FrequencyFit module
     #
     sim[["dataFireSense_FrequencyFit"]] <- bind_rows(
@@ -424,10 +428,10 @@ Run <- function(sim)
   }
   else
   {
-    names(sim[["MDC06"]]) <- "MDC06"
+    if (!is.null(sim[["MDC06"]])){
+      names(sim[["MDC06"]]) <- "MDC06" # If is.null(sim[["MDC06"]]), it errors. Coming from (MDC_NWT_DataPrep)! Wasn't defined.
+    } else message(crayon::red("MDC06 is NULL. Possibly a problem in MDC_NWT_DataPrep module"))
   }
-
-  
   return(invisible(sim))
 }
 
