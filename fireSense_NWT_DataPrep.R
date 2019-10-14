@@ -106,6 +106,11 @@ defineModule(sim, list(
       objectName = "LCC", 
       objectClass = "RasterStack", 
       desc = "Contains LCC classes. Necessary to predict with fireSense for BCR6 as contained in the Northwest Territories."
+    ),
+    createsOutput(
+      objectName = "MDC06", 
+      objectClass = "RasterLayer", 
+      desc = "Contains MDC06 for the current year. Necessary to predict with fireSense for BCR6 as contained in the Northwest Territories."
     )
   )
 ))
@@ -308,7 +313,7 @@ PrepThisYearLCC <- function(sim)
       ) %>% bind_cols %>% filter_at(2, all_vars(!is.na(.)))
   }
   else
-  {
+  { # This happens for predicting
     sim[["LCC"]] <- setNames(
         raster::stack(
           Cache(lapply, c(1:32, 34:35), function(x) mod[["vegMap"]] == x)),
@@ -353,14 +358,20 @@ Run <- function(sim){
   {
     sim <- PrepThisYearMDC(sim) 
     sim <- PrepThisYearFire(sim)
-  }
-
+  } # Fire and MDC only get prepped when train == TRUE, while LCC gets prepped every time the module `fireSense_NWT_DataPrep runs`
+  
+  sim$MDC06 <- usefun::prepareClimateLayers(authEmail = usrEmail,
+                                                         pathInputs = inputPath(sim), studyArea = sim$studyArea,
+                                                         rasterToMatch = sim$rasterToMatch, years = time(sim),
+                                                         variables = "fireSense", model = "fireSense", 
+                                            returnCalculatedLayersForFireSense = TRUE)
+  sim$MDC06 <- sim$MDC06[[paste0("year", time(sim))]]
   sim <- PrepThisYearLCC(sim)
 
   if (P(sim)$train)
   {
     # Prepare input data for the fireSense_FrequencyFit module
-    #
+browser() # Understand what the heck is going on down here. This only happens in training... so in theory I don't need this to predict
     sim[["dataFireSense_FrequencyFit"]] <- bind_rows(
       sim[["dataFireSense_FrequencyFit"]],
       bind_cols(
@@ -430,7 +441,7 @@ Run <- function(sim){
   {
     if (!is.null(sim[["MDC06"]])){
       names(sim[["MDC06"]]) <- "MDC06" # If is.null(sim[["MDC06"]]), it errors. Coming from (MDC_NWT_DataPrep)! Wasn't defined.
-    } else message(crayon::red("MDC06 is NULL. Possibly a problem in MDC_NWT_DataPrep module"))
+    } else stop("MDC06 is NULL. Possibly a problem in MDC_NWT_DataPrep module")
   }
   return(invisible(sim))
 }
@@ -514,9 +525,13 @@ Run <- function(sim){
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
   
-  # ! ----- EDIT BELOW ----- ! #
+  if (!suppliedElsewhere("usrEmail", sim)){
+    sim$usrEmail <- if (pemisc::user() %in% c("tmichele", "Tati")) "tati.micheletti@gmail.com" else NULL
+  }
+  if (!suppliedElsewhere("usrEmail", sim)){
+    sim$usrEmail <- if (pemisc::user() %in% c("tmichele", "Tati")) "tati.micheletti@gmail.com" else NULL
+  }
   
-  # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
 }
 ### add additional events as needed by copy/pasting from above
