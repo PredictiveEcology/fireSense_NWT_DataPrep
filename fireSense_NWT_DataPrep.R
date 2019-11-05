@@ -359,8 +359,9 @@ Run <- function(sim){
     sim <- PrepThisYearMDC(sim) 
     sim <- PrepThisYearFire(sim)
   } # Fire and MDC only get prepped when train == TRUE, while LCC gets prepped every time the module `fireSense_NWT_DataPrep runs`
-  
-  sim$MDC06 <- usefun::prepareClimateLayers(authEmail = usrEmail,
+  if (is.null(sim$usrEmail))
+    warning("If in a non-interactive session, please make sure you supply the object `usrEmail` for google authentication")
+  sim$MDC06 <- usefun::prepareClimateLayers(authEmail = sim$usrEmail,
                                                          pathInputs = inputPath(sim), studyArea = sim$studyArea,
                                                          rasterToMatch = sim$rasterToMatch, years = time(sim),
                                                          variables = "fireSense", model = "fireSense", 
