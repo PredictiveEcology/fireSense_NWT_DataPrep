@@ -31,7 +31,17 @@ defineModule(sim, list(
     defineParameter(name = ".useCache", class = "logical", default = FALSE, 
                     desc = "Should this entire module be run with caching 
                             activated? This is generally intended for data-type
-                            modules, where stochasticity and time are not relevant")
+                            modules, where stochasticity and time are not relevant"),
+    defineParameter(name = "RCP", class = "character", default = "85", min = NA, max = NA, 
+                    desc = "Which RCP should be used? Default to 85"),
+    defineParameter(name = "climateModel", class = "character", default = "CCSM4", min = NA, max = NA, 
+                    desc = "Which climate model should be used? Default to CCSM4"),
+    defineParameter(name = "ensemble", class = "character", default = "CCSM4", min = NA, max = NA, 
+                    desc = "Which ensemble model should be used? Default to ''. CCSM4 doesn't have ensemble, just CanESM2 (r11i1p1)"),
+    defineParameter(name = "climateResolution", class = "character", default = "3ArcMin", min = NA, max = NA, 
+                    desc = "Which DEM resolution was used for generating the climate layers? Default to '3ArcMin'."),
+    defineParameter(name = "climateFilePath", class = "character", default = "https://drive.google.com/open?id=17idhQ_g43vGUQfT-n2gLVvlp0X9vo-R8", min = NA, max = NA, 
+                    desc = "URL to zipped climate file coming from ClimateNA, containing all climate variables for all years of simulation")
   ),
   inputObjects = bind_rows(
     #expectsInput("objectName", "objectClass", "input object description", sourceURL, ...),
@@ -88,6 +98,12 @@ defineModule(sim, list(
       objectClass = "RasterLayer",
       sourceURL = NA,
       desc = "Rasterlayer describing the Monthly Drougth Code of June for the current year."
+    ), 
+    expectsInput( # ~ TM added on 11AUG19 --> Not defining it was causing it to be NULL in simList
+      objectName = "wetLCC",
+      objectClass = "RasterLayer",
+      sourceURL = NA,
+      desc = "Rasterlayer with 3 values, generated from DUCKS unlimited, showing water = 1, wetlands = 2, and uplands = 3."
     )
   ),
   outputObjects = bind_rows(
@@ -159,15 +175,6 @@ Init <- function(sim)
   #   studyArea = smallSR,
   #   filename2 = NULL
   # )
-  message("Loading water layer...")
-  wetLCC <- prepInputs(destinationPath = tempdir(), # Or another directory.
-    omitArgs = "destinationPath",
-    url = "https://drive.google.com/file/d/1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm/view",
-    targetFile = "wetlandsNWT250m.tif",
-    rasterToMatch = sim[["vegMap"]],
-    maskWithRTM = TRUE,
-    filename2 = NULL
-  )
   
   # sim[["NFDB_PO"]] <- as(
   #   postProcess(
@@ -192,8 +199,8 @@ message("Reclassifying water in LCC05...")
   mod[["vegMap"]] <- sim[["vegMap"]]
   if (is.null(sim[["vegMap"]]))
     stop("vegMap is still NULL. Please debug .inputObjects")
-  mod[["vegMap"]][wetLCC == 1] <- 37 # LCC05 code for Water bodies
-  mod[["vegMap"]][wetLCC == 2] <- 19 # LCC05 code for Wetlands
+  mod[["vegMap"]][sim$wetLCC == 1] <- 37 # LCC05 code for Water bodies
+  mod[["vegMap"]][sim$wetLCC == 2] <- 19 # LCC05 code for Wetlands
   
   if (P(sim)$train){
     message("train is TRUE, preparing RTM. This should happen only if dataFireSense_EscapeFit \nand dataFireSense_FrequencyFit are not being passed.")
@@ -315,8 +322,7 @@ PrepThisYearLCC <- function(sim)
   else
   { # This happens for predicting
     sim[["LCC"]] <- setNames(
-        raster::stack(
-          Cache(lapply, c(1:32, 34:35), function(x) mod[["vegMap"]] == x)),
+        raster::stack(lapply(c(1:32, 34:35), function(x) mod[["vegMap"]] == x)),
       nm = paste0("cl", c(1:32, 34:35))
     )
   }
@@ -361,11 +367,17 @@ Run <- function(sim){
   } # Fire and MDC only get prepped when train == TRUE, while LCC gets prepped every time the module `fireSense_NWT_DataPrep runs`
   if (is.null(sim$usrEmail))
     warning("If in a non-interactive session, please make sure you supply the object `usrEmail` for google authentication")
+
   sim$MDC06 <- usefun::prepareClimateLayers(authEmail = sim$usrEmail,
                                                          pathInputs = inputPath(sim), studyArea = sim$studyArea,
                                                          rasterToMatch = sim$rasterToMatch, years = time(sim),
-                                                         variables = "fireSense", model = "fireSense", 
-                                            returnCalculatedLayersForFireSense = TRUE)
+                                                         variables = "fireSense", model = "fireSense",
+                                                         returnCalculatedLayersForFireSense = TRUE,
+					                                               RCP = P(sim)$RCP,
+                                                         climateModel = P(sim)$climateModel,
+                                                         ensemble = P(sim)$ensemble, 
+				                                                 climateFilePath = P(sim)$climateFilePath,
+				                                                 fileResolution = P(sim)$climateResolution)
   sim$MDC06 <- sim$MDC06[[paste0("year", time(sim))]]
   sim <- PrepThisYearLCC(sim)
 
@@ -532,6 +544,20 @@ browser() # Understand what the heck is going on down here. This only happens in
   if (!suppliedElsewhere("usrEmail", sim)){
     sim$usrEmail <- if (pemisc::user() %in% c("tmichele", "Tati")) "tati.micheletti@gmail.com" else NULL
   }
+  
+  if (!suppliedElsewhere("wetLCC", sim)){
+    message("wetLCC not supplied. Loading water layer for the NWT...")
+    sim$wetLCC <- prepInputs(destinationPath = tempdir(), # Or another directory.
+                             omitArgs = "destinationPath",
+                             url = "https://drive.google.com/file/d/1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm/view",
+                             targetFile = "wetlandsNWT250m.tif",
+                             rasterToMatch = sim[["rasterToMatch"]],
+                             maskWithRTM = TRUE,
+                             filename2 = NULL
+    )
+  }
+  
+  
   
   return(invisible(sim))
 }
