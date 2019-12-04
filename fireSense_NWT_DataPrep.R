@@ -104,6 +104,12 @@ defineModule(sim, list(
       objectClass = "RasterLayer",
       sourceURL = NA,
       desc = "Rasterlayer with 3 values, generated from DUCKS unlimited, showing water = 1, wetlands = 2, and uplands = 3."
+    ),
+    expectsInput( # ~ TM added on 04DEC19 --> Not defining it was causing it to be NULL in simList
+      objectName = "usrEmail",
+      objectClass = "character",
+      sourceURL = NA,
+      desc = "User e.mail for GDrive authorization"
     )
   ),
   outputObjects = bind_rows(
@@ -538,9 +544,6 @@ browser() # Understand what the heck is going on down here. This only happens in
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
   
-  if (!suppliedElsewhere("usrEmail", sim)){
-    sim$usrEmail <- if (pemisc::user() %in% c("tmichele", "Tati")) "tati.micheletti@gmail.com" else NULL
-  }
   if (!suppliedElsewhere("usrEmail", sim)){
     sim$usrEmail <- if (pemisc::user() %in% c("tmichele", "Tati")) "tati.micheletti@gmail.com" else NULL
   }
